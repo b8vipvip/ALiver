@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 
-if (-not (Test-Path .\.venv\Scripts\python.exe)) {
-    throw "未找到 .venv。请先执行 .\scripts\setup_windows.ps1"
+$pythonExe = ".\.venv\Scripts\python.exe"
+if (-not (Test-Path $pythonExe)) {
+    throw ".venv was not found. Run .\scripts\setup_windows.ps1 first."
 }
 
-& .\.venv\Scripts\Activate.ps1
-python bridge\agent.py
+& $pythonExe bridge\agent.py
