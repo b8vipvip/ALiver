@@ -8,6 +8,8 @@ on:
       - '.github/workflows/bootstrap.yml'
   issues:
     types: [opened]
+  pull_request_target:
+    types: [opened]
   workflow_dispatch:
 
 permissions:
@@ -15,11 +17,16 @@ permissions:
 
 jobs:
   unpack:
-    if: github.event_name != 'issues' || startsWith(github.event.issue.title, 'bootstrap-aliver-')
+    if: >-
+      (github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'issues' && startsWith(github.event.issue.title, 'bootstrap-aliver-')) ||
+      (github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.title, 'bootstrap-aliver-'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - name: Rebuild source archive
         shell: bash
