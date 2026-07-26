@@ -63,22 +63,26 @@ class BridgeAgent:
     def server_url(self) -> str:
         return str(self.config.get("server_url", "http://127.0.0.1:8765")).rstrip("/")
 
+    @staticmethod
+    def capabilities() -> list[str]:
+        return [
+            "system.info",
+            "process.list",
+            "process.start",
+            "process.stop",
+            "audio.devices",
+            "audio.capture.start",
+            "audio.capture.status",
+            "audio.capture.stop",
+            "provider.liveavatar.placeholder",
+        ]
+
     async def register(self) -> None:
         payload = {
             "name": self.config.get("name", "Windows AI Live Bridge"),
             "machine_name": socket.gethostname(),
             "version": BRIDGE_VERSION,
-            "capabilities": [
-                "system.info",
-                "process.list",
-                "process.start",
-                "process.stop",
-                "audio.devices",
-                "audio.capture.start",
-                "audio.capture.status",
-                "audio.capture.stop",
-                "provider.liveavatar.placeholder",
-            ],
+            "capabilities": self.capabilities(),
             "metadata": self.system_info(),
         }
         async with httpx.AsyncClient(timeout=20) as client:
@@ -87,6 +91,30 @@ class BridgeAgent:
             self.state = response.json()
             self.save_state()
         print(f"Registered Bridge: {self.state['bridge_id']}")
+
+    async def sync_registration(self) -> None:
+        bridge_id = self.state.get("bridge_id")
+        token = self.state.get("token")
+        if not bridge_id or not token:
+            await self.register()
+            return
+        payload = {
+            "version": BRIDGE_VERSION,
+            "capabilities": self.capabilities(),
+            "metadata": self.system_info(),
+        }
+        headers = {"X-Bridge-Token": str(token)}
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f"{self.server_url}/api/bridges/{bridge_id}/heartbeat",
+                json=payload,
+                headers=headers,
+            )
+            if response.status_code in (401, 404):
+                self.state = {}
+                await self.register()
+                return
+            response.raise_for_status()
 
     def ws_url(self) -> str:
         parsed = urlparse(self.server_url)
@@ -109,6 +137,8 @@ class BridgeAgent:
     async def run(self) -> None:
         if not self.state.get("bridge_id") or not self.state.get("token"):
             await self.register()
+        else:
+            await self.sync_registration()
         while not self.stop_event.is_set():
             try:
                 async with websockets.connect(
