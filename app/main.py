@@ -9,6 +9,8 @@ import uvicorn
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
+from app import __version__
 from app.api import bridges, dashboard, health, logs, providers, sessions
 from app.bridge_hub import bridge_hub
 from app.config import get_settings
@@ -52,7 +54,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ALiver",
-    version="0.1.0",
+    version=__version__,
     description="Local-first AI live avatar provider and bridge control plane",
     lifespan=lifespan,
 )

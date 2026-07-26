@@ -13,7 +13,7 @@
       <p>AI 直播数字人本地控制服务</p>
     </div>
     <div class="toolbar">
-      <input id="admin-token" type="password" placeholder="X-ALiver-Token（可选）">
+      <input id="admin-token" type="password" placeholder="X-ALiver-Token">
       <button id="save-token" class="secondary">保存令牌</button>
       <span id="health" class="badge">检查中</span>
     </div>
@@ -31,6 +31,7 @@
       <button data-tab="providers" class="active">供应商</button>
       <button data-tab="sessions">会话</button>
       <button data-tab="bridges">Bridge</button>
+      <button data-tab="audio">音频</button>
       <button data-tab="logs">日志</button>
     </nav>
 
@@ -85,6 +86,55 @@
         <p class="hint">运行 <code>python bridge\agent.py</code> 后，节点会自动注册并上线。</p>
         <div id="bridge-list" class="list"></div>
       </article>
+    </section>
+
+    <section id="tab-audio" class="tab-panel">
+      <div class="grid two">
+        <article class="panel">
+          <h2>ChatGPT 音频捕获</h2>
+          <p class="hint">扫描 Windows WASAPI 设备，选择 Chrome/ChatGPT 所在的扬声器回放设备。</p>
+          <label>执行 Bridge
+            <select id="audio-bridge"><option value="">请选择在线 Bridge</option></select>
+          </label>
+          <div class="actions">
+            <button id="audio-scan" type="button">扫描音频设备</button>
+            <button id="audio-status" type="button" class="secondary">读取状态</button>
+          </div>
+          <label>捕获设备
+            <select id="audio-device"><option value="">请先扫描设备</option></select>
+          </label>
+          <label>测试 WAV 时长（秒）
+            <input id="audio-wav-seconds" type="number" min="1" max="60" value="10">
+          </label>
+          <label class="check-row">
+            <input id="audio-save-wav" type="checkbox" checked>
+            保存一份测试 WAV 到 <code>bridge\captures</code>
+          </label>
+          <div class="actions">
+            <button id="audio-start" type="button">开始捕获</button>
+            <button id="audio-stop" type="button" class="danger">停止捕获</button>
+          </div>
+          <p class="hint">第一版按“输出设备回放”捕获，因此会录到该设备上的全部系统声音。建议先把 Chrome 单独输出到 VB-CABLE。</p>
+        </article>
+
+        <article class="panel">
+          <div class="section-title"><h2>实时状态</h2><span id="audio-state-badge" class="badge warn">未启动</span></div>
+          <div class="audio-meter" aria-label="实时音量">
+            <div id="audio-meter-fill"></div>
+          </div>
+          <div class="audio-levels">
+            <span>电平 <strong id="audio-dbfs">-96.0 dBFS</strong></span>
+            <span>时长 <strong id="audio-elapsed">0.0 秒</strong></span>
+          </div>
+          <pre id="audio-status-json">尚未读取状态。</pre>
+
+          <h3>可捕获设备</h3>
+          <div id="audio-device-list" class="device-list"><p class="hint">尚未扫描。</p></div>
+
+          <h3>输出设备参考</h3>
+          <div id="audio-output-list" class="device-list"><p class="hint">尚未扫描。</p></div>
+        </article>
+      </div>
     </section>
 
     <section id="tab-logs" class="tab-panel">

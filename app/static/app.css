@@ -23,7 +23,7 @@ main { max-width: 1500px; margin: 0 auto; padding: 24px; }
 .metrics article { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
 .metrics strong { font-size: 30px; display: block; }
 .metrics span { color: var(--muted); }
-.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .tabs button { background: transparent; border: 1px solid var(--line); color: var(--text); }
 .tabs button.active { background: var(--accent); border-color: var(--accent); }
 .tab-panel { display: none; }
@@ -55,10 +55,23 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #010409; paddi
 code { color: #79c0ff; }
 .toast { position: fixed; right: 22px; bottom: 22px; max-width: 500px; background: var(--panel2); border: 1px solid var(--line); padding: 13px 16px; border-radius: 9px; display: none; z-index: 5; }
 .toast.show { display: block; }
+
+.check-row { display: flex; align-items: center; gap: 9px; }
+.check-row input { width: auto; margin: 0; }
+.audio-meter { height: 24px; margin: 18px 0 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 999px; background: #010409; }
+.audio-meter > div { width: 0; height: 100%; background: linear-gradient(90deg, var(--good), var(--warn), var(--bad)); transition: width .12s linear; }
+.audio-levels { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--muted); }
+.audio-levels strong { color: var(--text); }
+.device-list { display: grid; gap: 7px; margin-bottom: 18px; }
+.device-row { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: #0d1117; }
+.device-row.selected { border-color: var(--accent); }
+.device-row span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
 @media (max-width: 900px) {
   .topbar { align-items: flex-start; flex-direction: column; gap: 12px; }
   .toolbar { width: 100%; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .grid.two { grid-template-columns: 1fr; }
   .log-row { grid-template-columns: 1fr; }
+  .audio-levels { flex-direction: column; }
 }

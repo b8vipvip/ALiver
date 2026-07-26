@@ -16,7 +16,12 @@ from urllib.parse import urlparse
 import httpx
 import websockets
 
-BRIDGE_VERSION = "0.1.0"
+try:
+    from bridge.audio_capture import AudioCaptureManager
+except ModuleNotFoundError:
+    from audio_capture import AudioCaptureManager
+
+BRIDGE_VERSION = "0.2.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATE_FILE = BASE_DIR / "state.json"
 LOCAL_CONFIG = BASE_DIR / "bridge.local.json"
@@ -34,6 +39,7 @@ class BridgeAgent:
         self.config = self.load_config()
         self.state = self.load_state()
         self.processes: dict[str, ManagedProcess] = {}
+        self.audio = AudioCaptureManager()
         self.stop_event = asyncio.Event()
 
     def load_config(self) -> dict[str, Any]:
@@ -48,7 +54,10 @@ class BridgeAgent:
         return json.loads(STATE_FILE.read_text(encoding="utf-8"))
 
     def save_state(self) -> None:
-        STATE_FILE.write_text(json.dumps(self.state, ensure_ascii=False, indent=2), encoding="utf-8")
+        STATE_FILE.write_text(
+            json.dumps(self.state, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     @property
     def server_url(self) -> str:
@@ -64,6 +73,10 @@ class BridgeAgent:
                 "process.list",
                 "process.start",
                 "process.stop",
+                "audio.devices",
+                "audio.capture.start",
+                "audio.capture.status",
+                "audio.capture.stop",
                 "provider.liveavatar.placeholder",
             ],
             "metadata": self.system_info(),
@@ -78,7 +91,10 @@ class BridgeAgent:
     def ws_url(self) -> str:
         parsed = urlparse(self.server_url)
         scheme = "wss" if parsed.scheme == "https" else "ws"
-        return f"{scheme}://{parsed.netloc}/ws/bridges/{self.state['bridge_id']}?token={self.state['token']}"
+        return (
+            f"{scheme}://{parsed.netloc}/ws/bridges/"
+            f"{self.state['bridge_id']}?token={self.state['token']}"
+        )
 
     def system_info(self) -> dict[str, Any]:
         return {
@@ -86,6 +102,8 @@ class BridgeAgent:
             "python": sys.version.split()[0],
             "hostname": socket.gethostname(),
             "pid": os.getpid(),
+            "bridge_version": BRIDGE_VERSION,
+            "audio_capture": self.audio.status(),
         }
 
     async def run(self) -> None:
@@ -93,7 +111,11 @@ class BridgeAgent:
             await self.register()
         while not self.stop_event.is_set():
             try:
-                async with websockets.connect(self.ws_url(), ping_interval=20, ping_timeout=20) as ws:
+                async with websockets.connect(
+                    self.ws_url(),
+                    ping_interval=20,
+                    ping_timeout=20,
+                ) as ws:
                     print("Bridge connected to ALiver")
                     heartbeat = asyncio.create_task(self.heartbeat_loop(ws))
                     try:
@@ -121,7 +143,12 @@ class BridgeAgent:
         payload = message.get("payload") or {}
         try:
             data = await self.execute(command_type, payload)
-            response = {"type": "result", "command_id": command_id, "ok": True, "data": data}
+            response = {
+                "type": "result",
+                "command_id": command_id,
+                "ok": True,
+                "data": data,
+            }
         except Exception as exc:
             response = {
                 "type": "result",
@@ -148,6 +175,25 @@ class BridgeAgent:
             return self.start_process(str(payload.get("process_id", "")))
         if command_type == "process.stop":
             return self.stop_process(str(payload.get("process_id", "")))
+        if command_type == "audio.devices":
+            return await asyncio.to_thread(self.audio.list_devices)
+        if command_type == "audio.capture.start":
+            device_index = payload.get("device_index")
+            if device_index in ("", None):
+                device_index = None
+            else:
+                device_index = int(device_index)
+            return await asyncio.to_thread(
+                self.audio.start,
+                device_index,
+                chunk_size=int(payload.get("chunk_size", 1024)),
+                save_wav=bool(payload.get("save_wav", True)),
+                wav_seconds=float(payload.get("wav_seconds", 10)),
+            )
+        if command_type == "audio.capture.status":
+            return self.audio.status()
+        if command_type == "audio.capture.stop":
+            return await asyncio.to_thread(self.audio.stop)
         if command_type == "provider.start_session":
             return await self.start_provider_session(payload)
         if command_type == "provider.stop_session":
@@ -161,7 +207,11 @@ class BridgeAgent:
             raise ValueError("Unknown process_id. Add it to bridge.local.json first.")
         current = self.processes.get(process_id)
         if current and current.popen.poll() is None:
-            return {"process_id": process_id, "pid": current.popen.pid, "already_running": True}
+            return {
+                "process_id": process_id,
+                "pid": current.popen.pid,
+                "already_running": True,
+            }
         command = definition.get("command")
         if not isinstance(command, list) or not command:
             raise ValueError("Configured command must be a non-empty list")
@@ -191,7 +241,8 @@ class BridgeAgent:
             "external_session_id": None,
             "message": (
                 "LiveAvatar Bridge connector scaffold is active. "
-                "Implement bridge/connectors/liveavatar.py to exchange session tokens and publish PCM audio."
+                "Implement bridge/connectors/liveavatar.py to exchange session tokens "
+                "and publish PCM audio."
             ),
             "config_received": {
                 "avatar_id": config.get("avatar_id"),
@@ -212,7 +263,10 @@ async def main() -> None:
             loop.add_signal_handler(sig, agent.stop_event.set)
         except NotImplementedError:
             pass
-    await agent.run()
+    try:
+        await agent.run()
+    finally:
+        await asyncio.to_thread(agent.audio.shutdown)
 
 
 if __name__ == "__main__":

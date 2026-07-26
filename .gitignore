@@ -8,6 +8,7 @@ venv/
 data/
 bridge/state.json
 bridge/bridge.local.json
+bridge/captures/
 *.log
 .DS_Store
 Thumbs.db
