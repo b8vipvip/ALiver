@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALiver 控制台</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>ALiver</h1>
+      <p>AI 直播数字人本地控制服务</p>
+    </div>
+    <div class="toolbar">
+      <input id="admin-token" type="password" placeholder="X-ALiver-Token（可选）">
+      <button id="save-token" class="secondary">保存令牌</button>
+      <span id="health" class="badge">检查中</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="metrics" id="metrics">
+      <article><strong id="metric-providers">0</strong><span>供应商</span></article>
+      <article><strong id="metric-sessions">0</strong><span>活动会话</span></article>
+      <article><strong id="metric-bridges">0</strong><span>在线 Bridge</span></article>
+      <article><strong id="metric-errors">0</strong><span>错误日志</span></article>
+    </section>
+
+    <nav class="tabs">
+      <button data-tab="providers" class="active">供应商</button>
+      <button data-tab="sessions">会话</button>
+      <button data-tab="bridges">Bridge</button>
+      <button data-tab="logs">日志</button>
+    </nav>
+
+    <section id="tab-providers" class="tab-panel active">
+      <div class="grid two">
+        <article class="panel">
+          <h2>新增数字人供应商</h2>
+          <form id="provider-form">
+            <label>名称<input name="name" required placeholder="例如 Tavus Echo"></label>
+            <label>类型
+              <select name="provider_type">
+                <option value="mock">Mock</option>
+                <option value="tavus">Tavus</option>
+                <option value="akool">AKOOL</option>
+                <option value="liveavatar">LiveAvatar</option>
+              </select>
+            </label>
+            <label>API Base URL<input name="api_base_url" placeholder="留空使用默认值"></label>
+            <label>凭据 JSON<textarea name="credentials" rows="4" placeholder='{"api_key":"..."}'></textarea></label>
+            <label>设置 JSON<textarea name="settings" rows="8" placeholder='{"avatar_id":"..."}'></textarea></label>
+            <button type="submit">保存供应商</button>
+          </form>
+        </article>
+        <article class="panel">
+          <div class="section-title"><h2>供应商列表</h2><button data-refresh="providers" class="secondary">刷新</button></div>
+          <div id="provider-list" class="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-sessions" class="tab-panel">
+      <div class="grid two">
+        <article class="panel">
+          <h2>启动数字人会话</h2>
+          <form id="session-form">
+            <label>供应商<select name="provider_config_id" id="session-provider" required></select></label>
+            <label>Bridge（LiveAvatar 必选）<select name="bridge_id" id="session-bridge"><option value="">不使用</option></select></label>
+            <label>本次覆盖设置 JSON<textarea name="overrides" rows="8" placeholder='{"conversation_name":"测试"}'></textarea></label>
+            <button type="submit">启动会话</button>
+          </form>
+        </article>
+        <article class="panel">
+          <div class="section-title"><h2>会话历史</h2><button data-refresh="sessions" class="secondary">刷新</button></div>
+          <div id="session-list" class="list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-bridges" class="tab-panel">
+      <article class="panel">
+        <div class="section-title"><h2>本地 Bridge 节点</h2><button data-refresh="bridges" class="secondary">刷新</button></div>
+        <p class="hint">运行 <code>python bridge\agent.py</code> 后，节点会自动注册并上线。</p>
+        <div id="bridge-list" class="list"></div>
+      </article>
+    </section>
+
+    <section id="tab-logs" class="tab-panel">
+      <article class="panel">
+        <div class="section-title"><h2>运行日志</h2><button data-refresh="logs" class="secondary">刷新</button></div>
+        <div id="log-summary" class="summary"></div>
+        <div id="log-list" class="log-list"></div>
+      </article>
+    </section>
+
+    <div id="toast" class="toast"></div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

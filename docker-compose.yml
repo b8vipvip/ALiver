@@ -1,0 +1,14 @@
+services:
+  aliver:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      ALIVER_HOST: 0.0.0.0
+      ALIVER_PORT: 8765
+      ALIVER_DATABASE_URL: sqlite:////app/data/aliver.db
+      ALIVER_SECRET_KEY: ${ALIVER_SECRET_KEY:-change-me-before-network-use}
+      ALIVER_ADMIN_TOKEN: ${ALIVER_ADMIN_TOKEN:-}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

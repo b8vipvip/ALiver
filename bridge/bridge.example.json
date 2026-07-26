@@ -1,0 +1,20 @@
+{
+  "server_url": "http://127.0.0.1:8765",
+  "name": "Windows AI Live Bridge",
+  "heartbeat_seconds": 10,
+  "processes": {
+    "chrome-chatgpt": {
+      "command": [
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "--app=https://chatgpt.com"
+      ],
+      "cwd": null
+    },
+    "douyin-live-companion": {
+      "command": [
+        "C:\\Program Files\\直播伴侣\\直播伴侣.exe"
+      ],
+      "cwd": null
+    }
+  }
+}

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+data/
+bridge/state.json
+bridge/bridge.local.json
+*.log
+.DS_Store
+Thumbs.db
