@@ -63,3 +63,25 @@ def test_extension_receives_queued_command_and_reports_result(client):
     row = next(item for item in rows if item["id"] == command["id"])
     assert row["status"] == "completed"
     assert row["result"]["sent"] is True
+
+
+def test_extension_hello_refreshes_version(client):
+    extension = register_extension(client)
+    with client.websocket_connect(
+        f"/ws/extensions/{extension['extension_id']}?token={extension['token']}"
+    ) as websocket:
+        assert websocket.receive_json()["type"] == "welcome"
+        websocket.send_json(
+            {
+                "type": "extension.hello",
+                "metadata": {
+                    "extension_version": "0.1.1",
+                    "runtime_id": "test-runtime",
+                },
+            }
+        )
+        assert websocket.receive_json()["type"] == "pong"
+        rows = client.get("/api/director/extensions").json()
+        row = next(item for item in rows if item["id"] == extension["extension_id"])
+        assert row["version"] == "0.1.1"
+        assert row["metadata"]["runtime_id"] == "test-runtime"
