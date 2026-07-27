@@ -21,7 +21,7 @@ try:
 except ModuleNotFoundError:
     from audio_capture import AudioCaptureManager
 
-BRIDGE_VERSION = "0.2.0"
+BRIDGE_VERSION = "0.3.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATE_FILE = BASE_DIR / "state.json"
 LOCAL_CONFIG = BASE_DIR / "bridge.local.json"
@@ -44,7 +44,10 @@ class BridgeAgent:
 
     def load_config(self) -> dict[str, Any]:
         if not LOCAL_CONFIG.exists():
-            LOCAL_CONFIG.write_text(EXAMPLE_CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
+            LOCAL_CONFIG.write_text(
+                EXAMPLE_CONFIG.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
             print(f"Created {LOCAL_CONFIG}. Edit process paths if needed.")
         return json.loads(LOCAL_CONFIG.read_text(encoding="utf-8"))
 
@@ -70,6 +73,14 @@ class BridgeAgent:
             "process.list",
             "process.start",
             "process.stop",
+            "audio.routes.scan",
+            "audio.routes.get",
+            "audio.routes.save",
+            "audio.routes.auto",
+            "audio.gpt_out.start",
+            "audio.gpt_out.status",
+            "audio.gpt_out.stop",
+            "audio.gpt_in.test",
             "audio.devices",
             "audio.capture.start",
             "audio.capture.status",
@@ -135,10 +146,7 @@ class BridgeAgent:
         }
 
     async def run(self) -> None:
-        if not self.state.get("bridge_id") or not self.state.get("token"):
-            await self.register()
-        else:
-            await self.sync_registration()
+        await self.sync_registration()
         while not self.stop_event.is_set():
             try:
                 async with websockets.connect(
@@ -205,25 +213,48 @@ class BridgeAgent:
             return self.start_process(str(payload.get("process_id", "")))
         if command_type == "process.stop":
             return self.stop_process(str(payload.get("process_id", "")))
-        if command_type == "audio.devices":
+
+        if command_type in {"audio.routes.scan", "audio.devices"}:
             return await asyncio.to_thread(self.audio.list_devices)
-        if command_type == "audio.capture.start":
-            device_index = payload.get("device_index")
-            if device_index in ("", None):
-                device_index = None
-            else:
-                device_index = int(device_index)
+        if command_type == "audio.routes.get":
+            return await asyncio.to_thread(self.audio.get_routes)
+        if command_type == "audio.routes.auto":
+            return await asyncio.to_thread(self.audio.apply_recommendations)
+        if command_type == "audio.routes.save":
             return await asyncio.to_thread(
-                self.audio.start,
-                device_index,
-                chunk_size=int(payload.get("chunk_size", 1024)),
-                save_wav=bool(payload.get("save_wav", True)),
-                wav_seconds=float(payload.get("wav_seconds", 10)),
+                self.audio.save_routes,
+                gpt_out_capture_key=str(payload.get("gpt_out_capture_key", "")),
+                gpt_in_playback_key=str(payload.get("gpt_in_playback_key", "")),
             )
-        if command_type == "audio.capture.status":
+        if command_type in {"audio.gpt_out.start", "audio.capture.start"}:
+            if command_type == "audio.capture.start" and payload.get("device_index") is not None:
+                return await asyncio.to_thread(
+                    self.audio.start,
+                    int(payload["device_index"]),
+                    chunk_size=int(payload.get("chunk_size", 1024)),
+                    save_wav=bool(payload.get("save_wav", True)),
+                    wav_seconds=float(payload.get("wav_seconds", 10)),
+                    auto_stop=bool(payload.get("auto_stop", False)),
+                )
+            return await asyncio.to_thread(
+                self.audio.start_gpt_out,
+                duration_seconds=float(payload.get("duration_seconds", 10)),
+                save_wav=bool(payload.get("save_wav", True)),
+                auto_stop=bool(payload.get("auto_stop", True)),
+                chunk_size=int(payload.get("chunk_size", 1024)),
+            )
+        if command_type in {"audio.gpt_out.status", "audio.capture.status"}:
             return self.audio.status()
-        if command_type == "audio.capture.stop":
+        if command_type in {"audio.gpt_out.stop", "audio.capture.stop"}:
             return await asyncio.to_thread(self.audio.stop)
+        if command_type == "audio.gpt_in.test":
+            return await asyncio.to_thread(
+                self.audio.play_gpt_in_test_tone,
+                duration_seconds=float(payload.get("duration_seconds", 2.0)),
+                frequency_hz=float(payload.get("frequency_hz", 660.0)),
+                volume=float(payload.get("volume", 0.18)),
+            )
+
         if command_type == "provider.start_session":
             return await self.start_provider_session(payload)
         if command_type == "provider.stop_session":
@@ -271,8 +302,7 @@ class BridgeAgent:
             "external_session_id": None,
             "message": (
                 "LiveAvatar Bridge connector scaffold is active. "
-                "Implement bridge/connectors/liveavatar.py to exchange session tokens "
-                "and publish PCM audio."
+                "The GPT_OUT route will become its PCM source in the provider phase."
             ),
             "config_received": {
                 "avatar_id": config.get("avatar_id"),
