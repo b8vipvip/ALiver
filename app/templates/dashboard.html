@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ALiver 控制台</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/director.css">
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +25,7 @@
       <article><strong id="metric-providers">0</strong><span>供应商</span></article>
       <article><strong id="metric-sessions">0</strong><span>活动会话</span></article>
       <article><strong id="metric-bridges">0</strong><span>在线 Bridge</span></article>
+      <article><strong id="metric-extensions">0</strong><span>导演扩展</span></article>
       <article><strong id="metric-errors">0</strong><span>错误日志</span></article>
     </section>
 
@@ -32,6 +34,7 @@
       <button data-tab="sessions">会话</button>
       <button data-tab="bridges">Bridge</button>
       <button data-tab="audio">音频路由</button>
+      <button data-tab="director">导演</button>
       <button data-tab="logs">日志</button>
     </nav>
 
@@ -157,7 +160,7 @@
           <div class="actions">
             <button id="gpt-in-test" type="button">发送中文人声测试</button>
           </div>
-          <p class="hint">测试会用 Windows 内置语音朗读一句完整的话。麦克风电平波动后，ChatGPT Live 应识别文字并回复“测试成功”。</p>
+          <p class="hint">测试会用 Windows 内置语音朗读一句完整的话；无需插入物理麦克风。</p>
           <pre id="gpt-in-test-json">尚未发送人声测试。</pre>
 
           <h3>保存路由</h3>
@@ -172,6 +175,54 @@
       </article>
     </section>
 
+    <section id="tab-director" class="tab-panel">
+      <article class="panel director-intro">
+        <div class="section-title">
+          <div>
+            <h2>ChatGPT Live 导演控制</h2>
+            <p class="hint">Chrome 扩展接收导演命令，把文字写入当前 ChatGPT 对话。离线时命令会排队，扩展上线后自动发送。</p>
+          </div>
+          <button id="director-refresh" type="button" class="secondary">刷新</button>
+        </div>
+        <div class="director-setup">
+          <strong>首次使用：</strong>Chrome 打开 <code>chrome://extensions</code>，启用开发者模式，加载仓库里的
+          <code>chrome_extension</code> 文件夹；然后在扩展弹窗中填写本页右上角相同的管理令牌并配对。
+        </div>
+        <div id="director-extension-list" class="extension-list"><p class="hint">尚未检测到导演扩展。</p></div>
+      </article>
+
+      <div class="grid two director-grid">
+        <article class="panel">
+          <h2>人工导演指令</h2>
+          <form id="director-command-form">
+            <label>目标 Chrome 扩展<select id="director-extension" name="extension_id" required><option value="">请先配对扩展</option></select></label>
+            <label>命令类型
+              <select name="command_type">
+                <option value="director_instruction">导演指令</option>
+                <option value="send_text">普通文字</option>
+              </select>
+            </label>
+            <label>指令内容<textarea id="director-content" name="content" rows="10" required placeholder="例如：回复观众小雪的问题，语气轻松，控制在20秒以内，结尾反问观众。"></textarea></label>
+            <div class="inline-fields director-options">
+              <label class="check-row"><input name="wrap_as_director" type="checkbox" checked>包装为后台导演指令</label>
+              <label class="check-row"><input name="auto_send" type="checkbox" checked>自动点击发送</label>
+              <label class="check-row"><input name="force" type="checkbox">ChatGPT 正在回答时也发送</label>
+              <label>优先级<input name="priority" type="number" min="0" max="100" value="50"></label>
+            </div>
+            <div class="actions">
+              <button type="submit">发送到 ChatGPT</button>
+              <button id="director-default-rules" type="button" class="secondary">填入开播规则</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="section-title"><h2>导演命令队列</h2><span class="hint">queued → dispatched → completed</span></div>
+          <div id="director-command-list" class="director-command-list"><p class="hint">暂无命令。</p></div>
+        </article>
+      </div>
+    </section>
+
     <section id="tab-logs" class="tab-panel">
       <article class="panel">
         <div class="section-title"><h2>运行日志</h2><button data-refresh="logs" class="secondary">刷新</button></div>
@@ -184,5 +235,6 @@
   </main>
   <script src="/static/app.js"></script>
   <script src="/static/gpt_in_speech_patch.js"></script>
+  <script src="/static/director.js"></script>
 </body>
 </html>
