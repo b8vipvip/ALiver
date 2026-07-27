@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import audioop
-import sys
 import threading
-import time
-from array import array
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -35,10 +32,7 @@ class Pcm16ToSimliConverter:
     def convert(self, data: bytes) -> bytes:
         if not data:
             return b""
-        if self.source_channels == 2:
-            mono = audioop.tomono(data, 2, 0.5, 0.5)
-        else:
-            mono = data
+        mono = audioop.tomono(data, 2, 0.5, 0.5) if self.source_channels == 2 else data
         if self.source_rate == SIMLI_SAMPLE_RATE:
             return mono
         converted, self._rate_state = audioop.ratecv(
@@ -91,6 +85,7 @@ class SimliLocalRenderer:
         finally:
             video_task.cancel()
             audio_task.cancel()
+            await asyncio.gather(video_task, audio_task, return_exceptions=True)
             await self.close()
 
     async def _display_video(self) -> None:
@@ -138,8 +133,7 @@ class SimliLocalRenderer:
         async for frame in self.client.getAudioStreamIterator():
             if self.stop_event.is_set() or frame is None:
                 break
-            samples = frame.to_ndarray()
-            self._audio_stream.write(samples.tobytes())
+            self._audio_stream.write(frame.to_ndarray().tobytes())
             await asyncio.sleep(0)
 
     async def close(self) -> None:
@@ -199,6 +193,8 @@ class SimliRuntime:
         }
 
     async def start(self) -> dict[str, Any]:
+        if self.audio_manager.status().get("active"):
+            raise RuntimeError("Stop the GPT_OUT capture test before starting Simli.")
         try:
             from simli import SimliClient, SimliConfig
             from simli.simli import SimliModels, TransportMode
@@ -252,6 +248,9 @@ class SimliRuntime:
                 daemon=True,
             )
             self.capture_thread.start()
+            await asyncio.sleep(0.2)
+            if self.state.get("error"):
+                raise RuntimeError(str(self.state["error"]))
             await self.client.sendSilence(0.25)
             self.state.update({"status": "active", "started_at": utc_iso()})
             return self.status()
@@ -304,8 +303,7 @@ class SimliRuntime:
             )
             while not self.stop_flag.is_set():
                 raw = stream.read(1024, exception_on_overflow=False)
-                levels = calculate_pcm16_levels(raw)
-                self.state["last_input_dbfs"] = levels["dbfs"]
+                self.state["last_input_dbfs"] = calculate_pcm16_levels(raw)["dbfs"]
                 pending.extend(converter.convert(raw))
                 while len(pending) >= SIMLI_CHUNK_BYTES:
                     chunk = bytes(pending[:SIMLI_CHUNK_BYTES])
@@ -330,18 +328,24 @@ class SimliRuntime:
                 audio.terminate()
 
     async def _sender_loop(self) -> None:
-        while not self.stop_flag.is_set():
-            try:
-                data = await asyncio.wait_for(self.audio_queue.get(), timeout=0.5)
-            except TimeoutError:
-                if self.renderer and self.renderer.stop_event.is_set():
-                    self.stop_flag.set()
-                continue
-            if not self.client:
-                continue
-            await self.client.send(data)
-            self.state["sent_chunks"] += 1
-            self.state["sent_bytes"] += len(data)
+        try:
+            while not self.stop_flag.is_set():
+                try:
+                    data = await asyncio.wait_for(self.audio_queue.get(), timeout=0.5)
+                except TimeoutError:
+                    if self.renderer and self.renderer.stop_event.is_set():
+                        self.stop_flag.set()
+                    continue
+                if not self.client:
+                    continue
+                await self.client.send(data)
+                self.state["sent_chunks"] += 1
+                self.state["sent_bytes"] += len(data)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.state.update({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            self.stop_flag.set()
 
     async def stop(self) -> dict[str, Any]:
         self.stop_flag.set()
@@ -349,9 +353,12 @@ class SimliRuntime:
             self.renderer.stop_event.set()
         if self.capture_thread and self.capture_thread.is_alive():
             await asyncio.to_thread(self.capture_thread.join, 3.0)
-        for task in (self.sender_task, self.renderer_task):
-            if task is not None and not task.done():
+        tasks = [task for task in (self.sender_task, self.renderer_task) if task is not None]
+        for task in tasks:
+            if not task.done():
                 task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         if self.client is not None:
             try:
                 await self.client.stop()
