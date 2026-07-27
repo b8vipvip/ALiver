@@ -8,7 +8,9 @@
 2. 打开右上角“开发者模式”。
 3. 点击“加载已解压的扩展程序”。
 4. 选择本仓库的 `chrome_extension` 文件夹。
-5. 安装后刷新所有已经打开的 ChatGPT 标签页。
+5. 首次安装后建议刷新已经打开的 ChatGPT 标签页。
+
+从 `0.1.1` 开始，扩展发送命令前会检查 ChatGPT 页面的接收端；接收端缺失时会自动注入 `content.js` 并重试一次。因此扩展升级或重新加载后，通常不再依赖手动刷新 ChatGPT 页面。
 
 ## 配对
 
@@ -32,6 +34,7 @@ queued -> dispatched -> completed
 ## 故障排查
 
 - `No ChatGPT tab is open`：先打开 `https://chatgpt.com/`。
-- `content script did not return`：刷新 ChatGPT 标签页；扩展安装前已经打开的页面不会自动注入脚本。
+- `Receiving end does not exist`：更新到扩展 `0.1.1`；在 `chrome://extensions` 点击该扩展的“重新加载”，然后重试。新版会自动补注入页面控制脚本。
+- `page controller injection failed`：确认当前标签页地址是 `chatgpt.com`，再刷新该标签页并重试。
 - `composer was not found`：确认当前页面能看到文字输入框，并重新加载扩展。
 - 扩展显示离线：确认 ALiver 服务端仍在运行，扩展弹窗点击“重新连接”。
