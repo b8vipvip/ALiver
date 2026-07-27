@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "ALiver ChatGPT Controller",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Receives ALiver director commands and sends them into the active ChatGPT conversation.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
-    "https://chatgpt.com/*"
+    "https://chatgpt.com/*",
+    "https://www.chatgpt.com/*",
+    "https://chat.openai.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -18,7 +20,11 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://www.chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
