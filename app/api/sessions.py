@@ -22,13 +22,17 @@ router = APIRouter(
 )
 
 
+def bridge_error_summary(bridge_result: dict) -> str:
+    detail = bridge_result.get("error_detail") or {}
+    if isinstance(detail, dict) and detail.get("message_zh"):
+        return str(detail["message_zh"])
+    return str(bridge_result.get("error") or "Bridge 执行失败，未返回具体原因。")
+
+
 @router.get("", response_model=list[SessionOut])
 def list_sessions(db: Session = Depends(get_db)) -> list[SessionOut]:
     rows = db.scalars(select(AvatarSession).order_by(AvatarSession.created_at.desc())).all()
-    providers = {
-        row.id: row
-        for row in db.scalars(select(ProviderConfig)).all()
-    }
+    providers = {row.id: row for row in db.scalars(select(ProviderConfig)).all()}
     return [session_to_out(row, providers.get(row.provider_config_id)) for row in rows]
 
 
@@ -36,19 +40,20 @@ def list_sessions(db: Session = Depends(get_db)) -> list[SessionOut]:
 async def create_session(payload: SessionCreate, db: Session = Depends(get_db)) -> SessionOut:
     config = db.get(ProviderConfig, payload.provider_config_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Provider not found")
+        raise HTTPException(status_code=404, detail="未找到供应商配置")
     if not config.enabled:
-        raise HTTPException(status_code=409, detail="Provider is disabled")
+        raise HTTPException(status_code=409, detail="供应商当前已禁用")
 
     provider = build_provider(config)
+    bridge: BridgeAgent | None = None
     if provider.execution_mode == "bridge":
         if not payload.bridge_id:
-            raise HTTPException(status_code=422, detail="This provider requires bridge_id")
+            raise HTTPException(status_code=422, detail="该供应商必须选择一个在线 Bridge")
         bridge = db.get(BridgeAgent, payload.bridge_id)
         if not bridge:
-            raise HTTPException(status_code=404, detail="Bridge not found")
+            raise HTTPException(status_code=404, detail="未找到所选 Bridge")
         if not bridge_hub.is_connected(bridge.id):
-            raise HTTPException(status_code=409, detail="Bridge is offline")
+            raise HTTPException(status_code=409, detail="所选 Bridge 当前离线")
 
     row = AvatarSession(
         provider_config_id=config.id,
@@ -61,6 +66,7 @@ async def create_session(payload: SessionCreate, db: Session = Depends(get_db)) 
     db.refresh(row)
 
     result = await provider.create_session(payload.overrides)
+    bridge_result: dict | None = None
     if result.success and provider.execution_mode == "bridge":
         command_payload = {
             "session_id": row.id,
@@ -81,11 +87,18 @@ async def create_session(payload: SessionCreate, db: Session = Depends(get_db)) 
             row.status = str(bridge_data.get("status") or ("active" if ok else "failed"))
             row.external_session_id = bridge_data.get("external_session_id")
             row.response_json = dumps(bridge_result)
-            row.error_message = None if ok else str(bridge_result.get("error") or "Bridge failed")
+            row.error_message = None if ok else bridge_error_summary(bridge_result)
         except RuntimeError as exc:
             row.status = "failed"
-            row.error_message = str(exc)
-            row.response_json = dumps({"error": str(exc)})
+            row.error_message = f"向 Bridge 下发启动命令失败：{exc}"
+            row.response_json = dumps(
+                {
+                    "error": str(exc),
+                    "error_zh": row.error_message,
+                    "stage": "bridge_command",
+                    "bridge_id": payload.bridge_id,
+                }
+            )
     elif result.success:
         row.status = str(result.data.get("status") or "active")
         row.external_session_id = result.external_session_id
@@ -100,15 +113,35 @@ async def create_session(payload: SessionCreate, db: Session = Depends(get_db)) 
     db.commit()
     db.refresh(row)
 
+    log_details = {
+        "status": row.status,
+        "error": row.error_message,
+        "provider_name": config.name,
+        "provider_type": config.provider_type,
+        "execution_mode": provider.execution_mode,
+        "bridge_name": bridge.name if bridge else None,
+        "bridge_machine": bridge.machine_name if bridge else None,
+        "bridge_result": bridge_result,
+        "provider_result": {
+            "success": result.success,
+            "error": result.error,
+            "latency_ms": result.latency_ms,
+        },
+        "overrides": payload.overrides,
+    }
     write_log(
         db,
         category="session.start",
-        message=f"Session start {'succeeded' if row.status != 'failed' else 'failed'}",
+        message=(
+            f"数字人会话启动成功：{config.name}"
+            if row.status != "failed"
+            else f"数字人会话启动失败：{config.name}"
+        ),
         level="INFO" if row.status != "failed" else "ERROR",
         provider_id=config.id,
         session_id=row.id,
         bridge_id=row.bridge_id,
-        details={"status": row.status, "error": row.error_message},
+        details=log_details,
         latency_ms=result.latency_ms,
     )
     return session_to_out(row, config)
@@ -118,18 +151,19 @@ async def create_session(payload: SessionCreate, db: Session = Depends(get_db)) 
 async def stop_session(session_id: str, db: Session = Depends(get_db)) -> SessionOut:
     row = db.get(AvatarSession, session_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="未找到会话")
     config = db.get(ProviderConfig, row.provider_config_id)
     if not config:
-        raise HTTPException(status_code=409, detail="Provider configuration no longer exists")
+        raise HTTPException(status_code=409, detail="该会话对应的供应商配置已不存在")
     provider = build_provider(config)
     response_data = loads(row.response_json, {})
+    bridge_result: dict | None = None
 
     if provider.execution_mode == "bridge":
         if not row.bridge_id or not bridge_hub.is_connected(row.bridge_id):
             row.status = "ended_local_only"
             row.ended_at = datetime.now(timezone.utc)
-            row.error_message = "Bridge offline; session marked ended locally"
+            row.error_message = "Bridge 离线，仅在服务端将会话标记为已结束"
             db.commit()
         else:
             plan = await provider.stop_session(row.external_session_id, response_data)
@@ -149,13 +183,13 @@ async def stop_session(session_id: str, db: Session = Depends(get_db)) -> Sessio
                 ok = bool(bridge_result.get("ok"))
                 row.status = "ended" if ok else "stop_failed"
                 row.response_json = dumps({"start": response_data, "stop": bridge_result})
-                row.error_message = None if ok else str(bridge_result.get("error") or "Bridge failed")
+                row.error_message = None if ok else bridge_error_summary(bridge_result)
                 if ok:
                     row.ended_at = datetime.now(timezone.utc)
                 db.commit()
             except RuntimeError as exc:
                 row.status = "stop_failed"
-                row.error_message = str(exc)
+                row.error_message = f"向 Bridge 下发停止命令失败：{exc}"
                 db.commit()
     else:
         result = await provider.stop_session(row.external_session_id, response_data)
@@ -173,11 +207,17 @@ async def stop_session(session_id: str, db: Session = Depends(get_db)) -> Sessio
     write_log(
         db,
         category="session.stop",
-        message=f"Session stop result: {row.status}",
+        message=f"数字人会话停止结果：{config.name} / {row.status}",
         level="INFO" if row.status in {"ended", "ended_local_only"} else "ERROR",
         provider_id=config.id,
         session_id=row.id,
         bridge_id=row.bridge_id,
-        details={"status": row.status, "error": row.error_message},
+        details={
+            "status": row.status,
+            "error": row.error_message,
+            "provider_name": config.name,
+            "provider_type": config.provider_type,
+            "bridge_result": bridge_result,
+        },
     )
     return session_to_out(row, config)
