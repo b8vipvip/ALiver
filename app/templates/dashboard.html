@@ -35,6 +35,7 @@
       <button data-tab="bridges">Bridge</button>
       <button data-tab="audio">音频路由</button>
       <button data-tab="director">导演</button>
+      <button data-tab="auto-director">自动导演</button>
       <button data-tab="logs">日志</button>
     </nav>
 
@@ -223,6 +224,87 @@
       </div>
     </section>
 
+    <section id="tab-auto-director" class="tab-panel">
+      <article class="panel auto-director-intro">
+        <div class="section-title">
+          <div>
+            <h2>自动导演 AI</h2>
+            <p class="hint">接收弹幕、礼物、关注等事件，先在本地完成去重、安全过滤和评分，再自动生成导演指令进入 Chrome 队列。</p>
+          </div>
+          <div class="actions">
+            <span id="auto-director-badge" class="badge warn">未配置</span>
+            <button id="auto-director-refresh" type="button" class="secondary">刷新</button>
+          </div>
+        </div>
+        <div id="auto-director-status" class="auto-director-status"><p class="hint">请选择目标 Chrome 扩展。</p></div>
+      </article>
+
+      <div class="grid two auto-director-grid">
+        <article class="panel">
+          <h2>自动导演配置</h2>
+          <form id="auto-director-config-form">
+            <label>目标 Chrome 扩展<select id="auto-director-extension" name="extension_id" required><option value="">请先配对扩展</option></select></label>
+            <div class="inline-fields director-options">
+              <label class="check-row"><input name="enabled" type="checkbox">启用后台自动调度</label>
+              <label>决策模式
+                <select id="auto-director-mode" name="mode">
+                  <option value="rules">本地规则（无需 API）</option>
+                  <option value="openai_compatible">OpenAI 兼容接口</option>
+                </select>
+              </label>
+            </div>
+            <div id="auto-director-ai-fields" class="auto-director-ai-fields">
+              <label>API Base URL<input name="api_base_url" placeholder="例如 https://example.com/v1"></label>
+              <label>模型名称<input name="model_name" placeholder="填写接口实际支持的模型"></label>
+              <label>API Key<input name="api_key" type="password" placeholder="留空表示保留已保存密钥"></label>
+            </div>
+            <div class="inline-fields auto-director-numbers">
+              <label>最低评分<input name="min_score" type="number" min="0" max="100" value="35"></label>
+              <label>发送冷却（秒）<input name="cooldown_seconds" type="number" min="1" max="600" value="12"></label>
+              <label>冷场触发（秒）<input name="idle_seconds" type="number" min="0" max="3600" value="120"></label>
+              <label>回答上限（秒）<input name="max_response_seconds" type="number" min="5" max="120" value="25"></label>
+              <label>重复窗口（秒）<input name="dedupe_window_seconds" type="number" min="0" max="3600" value="90"></label>
+            </div>
+            <label>过滤关键词（每行一个）<textarea name="blocked_keywords" rows="5" placeholder="加微信&#10;私信领取&#10;博彩"></textarea></label>
+            <label>冷场话题（每行一个）<textarea name="idle_topics" rows="6" placeholder="轻松问问大家今天过得怎么样。"></textarea></label>
+            <div class="actions">
+              <button type="submit">保存自动导演配置</button>
+              <button id="auto-director-process" type="button" class="secondary">立即处理一次</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2>事件模拟 / 接入测试</h2>
+          <p class="hint">后续抖音弹幕采集器只需调用同一个事件接口。现在可先人工模拟评论、礼物和关注。</p>
+          <form id="auto-director-event-form">
+            <label>事件类型
+              <select name="event_type">
+                <option value="comment">评论</option>
+                <option value="gift">礼物</option>
+                <option value="follow">关注</option>
+                <option value="like">点赞</option>
+                <option value="share">分享</option>
+              </select>
+            </label>
+            <label>平台<input name="platform" value="douyin-test"></label>
+            <label>观众昵称<input name="user_name" value="测试观众"></label>
+            <label>事件内容<textarea name="content" rows="6" placeholder="例如：AI以后会不会有感情？"></textarea></label>
+            <button type="submit">提交测试事件</button>
+          </form>
+          <div id="auto-director-last-result" class="diagnosis warn">尚未提交测试事件。</div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <div class="section-title">
+          <h2>互动事件队列</h2>
+          <span class="hint">queued：等待处理；selected：已生成导演命令；ignored：已过滤</span>
+        </div>
+        <div id="auto-director-event-list" class="auto-director-event-list"><p class="hint">暂无事件。</p></div>
+      </article>
+    </section>
+
     <section id="tab-logs" class="tab-panel">
       <article class="panel">
         <div class="section-title"><h2>运行日志</h2><button data-refresh="logs" class="secondary">刷新</button></div>
@@ -236,5 +318,6 @@
   <script src="/static/app.js"></script>
   <script src="/static/gpt_in_speech_patch.js"></script>
   <script src="/static/director.js"></script>
+  <script src="/static/auto_director.js"></script>
 </body>
 </html>

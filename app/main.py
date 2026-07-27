@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -11,7 +12,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import bridges, dashboard, director, health, logs, providers, sessions
+from app.api import auto_director, bridges, dashboard, director, health, logs, providers, sessions
+from app.auto_director_service import auto_director_worker
 from app.bridge_hub import bridge_hub
 from app.config import get_settings
 from app.db import SessionLocal, init_db
@@ -49,8 +51,12 @@ async def lifespan(app: FastAPI):
                 message="Created the default Local Mock provider",
                 provider_id=mock.id,
             )
+    auto_director_stop = asyncio.Event()
+    auto_director_task = asyncio.create_task(auto_director_worker(auto_director_stop))
     logger.info("ALiver started on %s:%s", settings.host, settings.port)
     yield
+    auto_director_stop.set()
+    await auto_director_task
     logger.info("ALiver stopping")
 
 
@@ -66,6 +72,7 @@ app.include_router(providers.router)
 app.include_router(sessions.router)
 app.include_router(bridges.router)
 app.include_router(director.router)
+app.include_router(auto_director.router)
 app.include_router(logs.router)
 app.include_router(dashboard.router)
 
