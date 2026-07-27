@@ -2,9 +2,8 @@ const state = {
   providers: [],
   bridges: [],
   sessions: [],
-  audioDevices: [],
-  audioOutputs: [],
-  audioStatus: null,
+  audioScan: null,
+  routeStatus: null,
   audioPollInFlight: false,
 };
 
@@ -36,7 +35,7 @@ function toast(message, isError = false) {
   el.textContent = message;
   el.style.borderColor = isError ? 'var(--bad)' : 'var(--good)';
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 4500);
+  setTimeout(() => el.classList.remove('show'), 5000);
 }
 
 function parseJson(text, fallback = {}) {
@@ -51,13 +50,24 @@ function statusBadge(value) {
   return `<span class="badge ${cls}">${value}</span>`;
 }
 
+function escapeHtml(value) {
+  return String(value).replace(
+    /[&<>'"]/g,
+    ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[ch],
+  );
+}
+
+function formatTime(value) {
+  return value ? new Date(value).toLocaleString() : '无';
+}
+
 async function loadHealth() {
   try {
     const value = await api('/api/health');
     const el = document.getElementById('health');
     el.textContent = `${value.status} · ${value.version}`;
     el.className = 'badge good';
-  } catch (error) {
+  } catch (_) {
     const el = document.getElementById('health');
     el.textContent = '服务异常';
     el.className = 'badge bad';
@@ -88,8 +98,7 @@ async function loadProviders() {
         <button class="secondary" onclick="toggleProvider('${p.id}', ${!p.enabled})">${p.enabled ? '禁用' : '启用'}</button>
       </div>
     </div>`).join('') || '<p class="hint">暂无供应商。</p>';
-  const select = document.getElementById('session-provider');
-  select.innerHTML = state.providers
+  document.getElementById('session-provider').innerHTML = state.providers
     .filter(p => p.enabled)
     .map(p => `<option value="${p.id}">${escapeHtml(p.name)}（${p.provider_type}）</option>`)
     .join('');
@@ -97,7 +106,6 @@ async function loadProviders() {
 
 function syncAudioBridgeOptions() {
   const select = document.getElementById('audio-bridge');
-  if (!select) return;
   const previous = select.value;
   const online = state.bridges.filter(bridge => bridge.connected);
   select.innerHTML = '<option value="">请选择在线 Bridge</option>' + online
@@ -125,8 +133,7 @@ async function loadBridges() {
         <button class="secondary" ${b.connected ? '' : 'disabled'} onclick="bridgeCommand('${b.id}', 'process.list')">进程列表</button>
       </div>
     </div>`).join('') || '<p class="hint">暂无 Bridge。运行 bridge/agent.py 后会自动注册。</p>';
-  const select = document.getElementById('session-bridge');
-  select.innerHTML = '<option value="">不使用</option>' + state.bridges
+  document.getElementById('session-bridge').innerHTML = '<option value="">不使用</option>' + state.bridges
     .filter(b => b.connected)
     .map(b => `<option value="${b.id}">${escapeHtml(b.name)}</option>`)
     .join('');
@@ -169,12 +176,7 @@ async function loadLogs() {
 async function refreshAll() {
   try {
     await Promise.all([
-      loadHealth(),
-      loadDashboard(),
-      loadProviders(),
-      loadBridges(),
-      loadSessions(),
-      loadLogs(),
+      loadHealth(), loadDashboard(), loadProviders(), loadBridges(), loadSessions(), loadLogs(),
     ]);
   } catch (error) {
     toast(error.message, true);
@@ -203,116 +205,185 @@ function selectedAudioBridge() {
   return id;
 }
 
-function deviceLabel(device) {
-  const type = device.is_loopback ? '回放' : device.kind === 'input' ? '输入' : '输出';
-  const defaults = [
-    device.is_default_loopback ? '默认回放' : '',
-    device.is_default_input ? '默认输入' : '',
-    device.is_default_output ? '默认输出' : '',
-  ].filter(Boolean).join('/');
-  const suffix = defaults ? ` · ${defaults}` : '';
-  return `[${type}] ${device.name} · ${device.default_sample_rate}Hz · ${device.input_channels || device.output_channels}ch${suffix}`;
+function routeDeviceLabel(device) {
+  const virtual = device.is_virtual ? ` · ${device.virtual_family}` : '';
+  return `${device.name} · ${device.default_sample_rate}Hz · ${device.input_channels || device.output_channels}ch${virtual}`;
 }
 
-function renderDeviceRows(targetId, devices) {
-  const target = document.getElementById(targetId);
-  target.innerHTML = devices.map(device => `
-    <div class="device-row ${device.is_default_loopback || device.is_default_output ? 'selected' : ''}">
-      <strong>#${device.index} ${escapeHtml(device.name)}</strong>
-      <span>${escapeHtml(deviceLabel(device))}</span>
-    </div>
-  `).join('') || '<p class="hint">没有发现对应设备。</p>';
+function findPair(family) {
+  return (state.audioScan?.virtual_pairs || []).find(pair => pair.family === family) || null;
 }
 
-function renderAudioDevices(data) {
-  state.audioDevices = data.capture_devices || [];
-  state.audioOutputs = data.output_devices || [];
-  const select = document.getElementById('audio-device');
-  const previous = select.value;
-  select.innerHTML = state.audioDevices.map(device => `
-    <option value="${device.index}">${escapeHtml(deviceLabel(device))}</option>
-  `).join('') || '<option value="">没有可捕获设备</option>';
+function optionHtml(devices, selectedKey, role) {
+  const rows = devices.filter(device => device.is_virtual);
+  return '<option value="">请选择虚拟设备</option>' + rows.map(device => {
+    const selected = device.key === selectedKey ? ' selected' : '';
+    return `<option value="${device.key}"${selected}>${escapeHtml(`[${role}] ${routeDeviceLabel(device)}`)}</option>`;
+  }).join('');
+}
 
-  if (state.audioDevices.some(device => String(device.index) === previous)) {
-    select.value = previous;
-  } else {
-    const preferred = state.audioDevices.find(device => device.is_default_loopback)
-      || state.audioDevices.find(device => device.is_loopback)
-      || state.audioDevices[0];
-    if (preferred) select.value = String(preferred.index);
+function renderRouteWarnings(warnings = []) {
+  document.getElementById('route-warning-list').innerHTML = warnings.length
+    ? warnings.map(message => `<div class="diagnosis warn">${escapeHtml(message)}</div>`).join('')
+    : '<div class="diagnosis good">未发现路由风险。</div>';
+}
+
+function updateRouteHints() {
+  const outKey = document.getElementById('gpt-out-device').value;
+  const inKey = document.getElementById('gpt-in-device').value;
+  const outDevice = (state.audioScan?.loopback_devices || []).find(row => row.key === outKey);
+  const inDevice = (state.audioScan?.output_devices || []).find(row => row.key === inKey);
+  const outPair = outDevice ? findPair(outDevice.virtual_family) : null;
+  const inPair = inDevice ? findPair(inDevice.virtual_family) : null;
+  document.getElementById('gpt-out-playback-hint').textContent =
+    outPair?.playback?.name || '未找到对应虚拟扬声器';
+  document.getElementById('gpt-in-microphone-hint').textContent =
+    inPair?.microphone?.name || '未找到对应虚拟麦克风';
+
+  const warnings = [];
+  if (outDevice && inDevice && outDevice.virtual_family === inDevice.virtual_family) {
+    warnings.push('GPT_IN 和 GPT_OUT 选择了同一虚拟声卡，会产生回灌。');
   }
-  renderDeviceRows('audio-device-list', state.audioDevices);
-  renderDeviceRows('audio-output-list', state.audioOutputs);
+  if (inDevice && !inPair?.microphone) warnings.push('GPT_IN 所选设备没有匹配的虚拟麦克风端点。');
+  renderRouteWarnings(warnings);
 }
 
-function renderAudioStatus(value) {
-  state.audioStatus = value;
-  const active = Boolean(value && value.active);
-  const badge = document.getElementById('audio-state-badge');
-  badge.textContent = active ? '捕获中' : value && value.error ? '错误' : '已停止';
-  badge.className = `badge ${active ? 'good' : value && value.error ? 'bad' : 'warn'}`;
-
-  const dbfs = Number(value && value.dbfs != null ? value.dbfs : -96);
-  const percent = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
-  document.getElementById('audio-meter-fill').style.width = `${percent}%`;
-  document.getElementById('audio-dbfs').textContent = `${dbfs.toFixed(1)} dBFS`;
-  const elapsed = Number(value && value.elapsed_seconds != null ? value.elapsed_seconds : 0);
-  document.getElementById('audio-elapsed').textContent = `${elapsed.toFixed(1)} 秒`;
-  document.getElementById('audio-status-json').textContent = JSON.stringify(value || {}, null, 2);
+function renderVirtualPairs(pairs = []) {
+  document.getElementById('virtual-pair-list').innerHTML = pairs.map(pair => `
+    <div class="pair-card ${pair.complete ? 'complete' : ''}">
+      <div class="item-head"><h3>${escapeHtml(pair.family)}</h3>${statusBadge(pair.complete ? 'ready' : 'incomplete')}</div>
+      <div><strong>播放：</strong>${escapeHtml(pair.playback?.name || '缺失')}</div>
+      <div><strong>回放：</strong>${escapeHtml(pair.loopback?.name || '缺失')}</div>
+      <div><strong>麦克风：</strong>${escapeHtml(pair.microphone?.name || '缺失')}</div>
+    </div>`).join('') || '<p class="hint">未检测到 VB-CABLE、VoiceMeeter 等虚拟声卡。</p>';
 }
 
-async function scanAudioDevices() {
-  const bridgeId = selectedAudioBridge();
-  const data = await sendBridgeCommand(bridgeId, 'audio.devices', {}, 30);
-  renderAudioDevices(data);
-  toast(`已扫描到 ${state.audioDevices.length} 个可捕获设备`);
+function renderRouteStatus(routeStatus) {
+  state.routeStatus = routeStatus;
+  const ready = Boolean(routeStatus?.ready);
+  const isolated = Boolean(routeStatus?.isolated);
+  const routeBadge = document.getElementById('route-ready-badge');
+  routeBadge.textContent = ready ? '双通道就绪' : isolated ? '部分就绪' : '未就绪';
+  routeBadge.className = `badge ${ready ? 'good' : 'warn'}`;
+
+  const outBadge = document.getElementById('gpt-out-badge');
+  outBadge.textContent = routeStatus?.gpt_out?.ready ? '已配置' : '未配置';
+  outBadge.className = `badge ${routeStatus?.gpt_out?.ready ? 'good' : 'warn'}`;
+  const inBadge = document.getElementById('gpt-in-badge');
+  inBadge.textContent = routeStatus?.gpt_in?.ready ? '已配置' : '未配置';
+  inBadge.className = `badge ${routeStatus?.gpt_in?.ready ? 'good' : 'warn'}`;
+
+  const out = routeStatus?.gpt_out?.capture;
+  const input = routeStatus?.gpt_in?.playback;
+  if (out) document.getElementById('gpt-out-device').value = out.key;
+  if (input) document.getElementById('gpt-in-device').value = input.key;
+  document.getElementById('gpt-out-playback-hint').textContent =
+    routeStatus?.gpt_out?.playback?.name || '尚未匹配';
+  document.getElementById('gpt-in-microphone-hint').textContent =
+    routeStatus?.gpt_in?.microphone?.name || '尚未匹配';
+  renderRouteWarnings(routeStatus?.warnings || []);
 }
 
-async function readAudioStatus(showToast = false) {
-  const bridgeId = selectedAudioBridge();
-  const data = await sendBridgeCommand(bridgeId, 'audio.capture.status', {}, 10);
-  renderAudioStatus(data);
-  if (showToast) toast('音频状态已更新');
-}
-
-async function startAudioCapture() {
-  const bridgeId = selectedAudioBridge();
-  const deviceIndex = document.getElementById('audio-device').value;
-  if (!deviceIndex) throw new Error('请先扫描并选择捕获设备');
-  const wavSeconds = Number(document.getElementById('audio-wav-seconds').value || 10);
-  const saveWav = document.getElementById('audio-save-wav').checked;
-  const data = await sendBridgeCommand(
-    bridgeId,
-    'audio.capture.start',
-    {
-      device_index: Number(deviceIndex),
-      chunk_size: 1024,
-      save_wav: saveWav,
-      wav_seconds: wavSeconds,
-    },
-    15,
+function renderAudioScan(data) {
+  state.audioScan = data;
+  const configured = data.routes?.configured || {};
+  document.getElementById('gpt-out-device').innerHTML = optionHtml(
+    data.loopback_devices || [], configured.gpt_out?.capture_device_key, 'GPT_OUT 回放',
   );
-  renderAudioStatus(data);
-  toast('音频捕获已启动，请让 ChatGPT Live 说一句话');
+  document.getElementById('gpt-in-device').innerHTML = optionHtml(
+    data.output_devices || [], configured.gpt_in?.playback_device_key, 'GPT_IN 写入',
+  );
+  renderVirtualPairs(data.virtual_pairs || []);
+  renderRouteStatus(data.routes || {});
+  updateRouteHints();
 }
 
-async function stopAudioCapture() {
-  const bridgeId = selectedAudioBridge();
-  const data = await sendBridgeCommand(bridgeId, 'audio.capture.stop', {}, 15);
-  renderAudioStatus(data);
-  toast(data.wav_path ? `捕获已停止，测试文件：${data.wav_path}` : '音频捕获已停止');
+async function scanRoutes() {
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.routes.scan', {}, 30);
+  renderAudioScan(data);
+  const virtualCount = (data.virtual_pairs || []).length;
+  toast(`扫描完成：发现 ${virtualCount} 组虚拟声卡`);
 }
 
-async function pollAudioStatus() {
+async function autoConfigureRoutes() {
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.routes.auto', {}, 30);
+  await scanRoutes();
+  renderRouteStatus(data);
+  toast('已自动选择两条相互隔离的虚拟声卡并保存');
+}
+
+async function saveRoutes() {
+  const outKey = document.getElementById('gpt-out-device').value;
+  const inKey = document.getElementById('gpt-in-device').value;
+  if (!outKey || !inKey) throw new Error('请分别选择 GPT_OUT 和 GPT_IN 虚拟设备');
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.routes.save', {
+    gpt_out_capture_key: outKey,
+    gpt_in_playback_key: inKey,
+  }, 30);
+  renderRouteStatus(data);
+  toast('双虚拟声卡路由已保存');
+}
+
+async function refreshRoutes() {
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.routes.get', {}, 30);
+  renderRouteStatus(data);
+  toast('已读取 Bridge 保存的音频路由');
+}
+
+function renderGptOutStatus(value) {
+  const active = Boolean(value?.active);
+  const dbfs = Number(value?.dbfs ?? -96);
+  const maxDbfs = Number(value?.max_dbfs ?? -96);
+  const percent = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
+  document.getElementById('gpt-out-meter-fill').style.width = `${percent}%`;
+  document.getElementById('gpt-out-dbfs').textContent = `${dbfs.toFixed(1)} dBFS`;
+  document.getElementById('gpt-out-max-dbfs').textContent = `${maxDbfs.toFixed(1)} dBFS`;
+  document.getElementById('gpt-out-elapsed').textContent = `${Number(value?.elapsed_seconds || 0).toFixed(1)} 秒`;
+  document.getElementById('gpt-out-status-json').textContent = JSON.stringify(value || {}, null, 2);
+  const diagnosis = value?.diagnosis || {};
+  const diagnosisEl = document.getElementById('gpt-out-diagnosis');
+  diagnosisEl.textContent = diagnosis.message || (active ? '捕获中。' : '尚未测试。');
+  const good = ['signal_ok', 'completed_signal_ok'].includes(diagnosis.code);
+  const bad = ['error', 'silent_wrong_route'].includes(diagnosis.code);
+  diagnosisEl.className = `diagnosis ${good ? 'good' : bad ? 'bad' : 'warn'}`;
+}
+
+async function startGptOutTest() {
+  const seconds = Number(document.getElementById('gpt-out-seconds').value || 10);
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.gpt_out.start', {
+    duration_seconds: seconds,
+    save_wav: document.getElementById('gpt-out-save-wav').checked,
+    auto_stop: true,
+  }, 15);
+  renderGptOutStatus(data);
+  toast(`GPT_OUT 测试已开始，${seconds} 秒后自动停止。现在让 ChatGPT Live 说话。`);
+}
+
+async function stopGptOutTest() {
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.gpt_out.stop', {}, 15);
+  renderGptOutStatus(data);
+  toast(data.wav_path ? `测试已停止：${data.wav_path}` : 'GPT_OUT 测试已停止');
+}
+
+async function testGptIn() {
+  const data = await sendBridgeCommand(selectedAudioBridge(), 'audio.gpt_in.test', {
+    duration_seconds: 2,
+    frequency_hz: 660,
+    volume: 0.18,
+  }, 15);
+  document.getElementById('gpt-in-test-json').textContent = JSON.stringify(data, null, 2);
+  toast(`测试音已送入 GPT_IN；ChatGPT 麦克风请选择：${data.microphone_hint || '匹配虚拟麦克风'}`);
+}
+
+async function pollGptOutStatus() {
   const panel = document.getElementById('tab-audio');
   const bridgeId = document.getElementById('audio-bridge').value;
   if (!panel.classList.contains('active') || !bridgeId || state.audioPollInFlight) return;
   state.audioPollInFlight = true;
   try {
-    const data = await sendBridgeCommand(bridgeId, 'audio.capture.status', {}, 8);
-    renderAudioStatus(data);
+    const data = await sendBridgeCommand(bridgeId, 'audio.gpt_out.status', {}, 8);
+    renderGptOutStatus(data);
   } catch (_) {
-    // Bridge refresh handles connectivity; do not show one toast per second.
   } finally {
     state.audioPollInFlight = false;
   }
@@ -323,66 +394,43 @@ window.testProvider = async id => {
     const value = await api(`/api/providers/${id}/test`, { method: 'POST' });
     toast(JSON.stringify(value));
     await loadLogs();
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 };
 
 window.toggleProvider = async (id, enabled) => {
   try {
     await api(`/api/providers/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ enabled }),
+      method: 'PATCH', body: JSON.stringify({ enabled }),
     });
     await loadProviders();
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 };
 
 window.stopSession = async id => {
   try {
     await api(`/api/sessions/${id}/stop`, { method: 'POST' });
     await Promise.all([loadSessions(), loadDashboard(), loadLogs()]);
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 };
 
 window.bridgeCommand = async (id, commandType) => {
   try {
     const value = await sendBridgeCommand(id, commandType);
     toast(JSON.stringify(value));
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 };
-
-function escapeHtml(value) {
-  return String(value).replace(
-    /[&<>'"]/g,
-    ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[ch],
-  );
-}
-
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString() : '无';
-}
 
 document.querySelectorAll('.tabs button').forEach(button => button.addEventListener('click', () => {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   button.classList.add('active');
   document.getElementById(`tab-${button.dataset.tab}`).classList.add('active');
-  if (button.dataset.tab === 'audio') {
-    pollAudioStatus();
-  }
+  if (button.dataset.tab === 'audio') pollGptOutStatus();
 }));
 
 document.querySelectorAll('[data-refresh]').forEach(button => button.addEventListener('click', () => {
-  const name = button.dataset.refresh;
-  ({ providers: loadProviders, sessions: loadSessions, bridges: loadBridges, logs: loadLogs })[name]()
-    .catch(error => toast(error.message, true));
+  const loaders = { providers: loadProviders, sessions: loadSessions, bridges: loadBridges, logs: loadLogs };
+  loaders[button.dataset.refresh]().catch(error => toast(error.message, true));
 }));
 
 document.getElementById('provider-form').addEventListener('submit', async event => {
@@ -402,9 +450,7 @@ document.getElementById('provider-form').addEventListener('submit', async event 
     event.target.reset();
     toast('供应商已保存');
     await Promise.all([loadProviders(), loadDashboard(), loadLogs()]);
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 });
 
 document.getElementById('session-form').addEventListener('submit', async event => {
@@ -421,45 +467,41 @@ document.getElementById('session-form').addEventListener('submit', async event =
     });
     toast('会话启动请求已完成');
     await Promise.all([loadSessions(), loadDashboard(), loadLogs()]);
-  } catch (error) {
-    toast(error.message, true);
-  }
+  } catch (error) { toast(error.message, true); }
 });
 
-document.getElementById('audio-scan').addEventListener('click', () => {
-  scanAudioDevices().catch(error => toast(error.message, true));
+const clickHandlers = {
+  'route-scan': scanRoutes,
+  'route-auto': autoConfigureRoutes,
+  'route-refresh': refreshRoutes,
+  'route-save': saveRoutes,
+  'gpt-out-start': startGptOutTest,
+  'gpt-out-stop': stopGptOutTest,
+  'gpt-in-test': testGptIn,
+};
+Object.entries(clickHandlers).forEach(([id, handler]) => {
+  document.getElementById(id).addEventListener('click', () => {
+    handler().catch(error => toast(error.message, true));
+  });
 });
-document.getElementById('audio-status').addEventListener('click', () => {
-  readAudioStatus(true).catch(error => toast(error.message, true));
-});
-document.getElementById('audio-start').addEventListener('click', () => {
-  startAudioCapture().catch(error => toast(error.message, true));
-});
-document.getElementById('audio-stop').addEventListener('click', () => {
-  stopAudioCapture().catch(error => toast(error.message, true));
-});
+
+document.getElementById('gpt-out-device').addEventListener('change', updateRouteHints);
+document.getElementById('gpt-in-device').addEventListener('change', updateRouteHints);
 document.getElementById('audio-bridge').addEventListener('change', () => {
-  state.audioDevices = [];
-  state.audioOutputs = [];
-  document.getElementById('audio-device').innerHTML =
-    '<option value="">请扫描当前 Bridge 的设备</option>';
-  renderAudioStatus({});
+  state.audioScan = null;
+  state.routeStatus = null;
+  document.getElementById('gpt-out-device').innerHTML = '<option value="">请先扫描</option>';
+  document.getElementById('gpt-in-device').innerHTML = '<option value="">请先扫描</option>';
+  renderGptOutStatus({});
 });
 
-document.getElementById('admin-token').value =
-  localStorage.getItem('aliverAdminToken') || '';
+document.getElementById('admin-token').value = localStorage.getItem('aliverAdminToken') || '';
 document.getElementById('save-token').addEventListener('click', () => {
-  localStorage.setItem(
-    'aliverAdminToken',
-    document.getElementById('admin-token').value.trim(),
-  );
+  localStorage.setItem('aliverAdminToken', document.getElementById('admin-token').value.trim());
   toast('令牌已保存到当前浏览器');
   refreshAll();
 });
 
 refreshAll();
-setInterval(
-  () => Promise.all([loadDashboard(), loadBridges()]).catch(() => {}),
-  8000,
-);
-setInterval(pollAudioStatus, 1000);
+setInterval(() => Promise.all([loadDashboard(), loadBridges()]).catch(() => {}), 8000);
+setInterval(pollGptOutStatus, 1000);
