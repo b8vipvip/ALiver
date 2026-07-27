@@ -66,3 +66,10 @@
   const bridgeLabel = bridgeSelect?.closest('label');
   if (bridgeLabel?.firstChild) bridgeLabel.firstChild.textContent = 'Bridge（Simli / LiveAvatar 必选）';
 })();
+
+(() => {
+  const script = document.createElement('script');
+  script.src = '/static/diagnostics_zh.js?v=0.6.1';
+  script.defer = true;
+  document.head.appendChild(script);
+})();
