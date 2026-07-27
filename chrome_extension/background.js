@@ -1,14 +1,37 @@
 const DEFAULT_SERVER = 'http://127.0.0.1:8765';
 const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+const CHATGPT_URLS = [
+  'https://chatgpt.com/*',
+  'https://www.chatgpt.com/*',
+  'https://chat.openai.com/*',
+];
 let socket = null;
 let reconnectTimer = null;
 let keepAliveTimer = null;
 let socketState = 'disconnected';
 
+function sleep(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
 function websocketUrl(serverUrl, extensionId, token) {
   const url = new URL(serverUrl || DEFAULT_SERVER);
   const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${url.host}/ws/extensions/${encodeURIComponent(extensionId)}?token=${encodeURIComponent(token)}`;
+}
+
+function isChatGptUrl(url = '') {
+  try {
+    const parsed = new URL(url);
+    return ['chatgpt.com', 'www.chatgpt.com', 'chat.openai.com'].includes(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function isMissingReceiverError(error) {
+  const message = String(error?.message || error || '');
+  return /Receiving end does not exist|Could not establish connection/i.test(message);
 }
 
 async function getConfig() {
@@ -65,10 +88,66 @@ async function pairExtension({ serverUrl, adminToken, extensionName }) {
   return result;
 }
 
+async function listChatGptTabs() {
+  const tabs = await chrome.tabs.query({ url: CHATGPT_URLS });
+  return tabs
+    .filter(tab => Number.isInteger(tab.id) && isChatGptUrl(tab.url || ''))
+    .sort((left, right) => {
+      const activeDifference = Number(Boolean(right.active)) - Number(Boolean(left.active));
+      if (activeDifference) return activeDifference;
+      return Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
+    });
+}
+
 async function findChatGptTab() {
-  const tabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
+  const tabs = await listChatGptTabs();
   if (!tabs.length) throw new Error('No ChatGPT tab is open. Open chatgpt.com first.');
-  return tabs.find(tab => tab.active) || tabs[0];
+  return tabs[0];
+}
+
+async function probeContentScript(tabId) {
+  const response = await chrome.tabs.sendMessage(tabId, { type: 'aliver.content.ping' });
+  return Boolean(response?.ok);
+}
+
+async function injectContentScript(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content.js'],
+  });
+  await sleep(100);
+}
+
+async function ensureContentScript(tab) {
+  if (!Number.isInteger(tab?.id)) throw new Error('ChatGPT tab has no valid tab ID.');
+  try {
+    if (await probeContentScript(tab.id)) return;
+  } catch (error) {
+    if (!isMissingReceiverError(error)) throw error;
+  }
+  await injectContentScript(tab.id);
+  try {
+    if (await probeContentScript(tab.id)) return;
+  } catch (error) {
+    throw new Error(`ChatGPT page controller injection failed: ${String(error.message || error)}`);
+  }
+  throw new Error('ChatGPT page controller was injected but did not respond. Reload the ChatGPT tab.');
+}
+
+async function sendToChatGpt(tab, message) {
+  await ensureContentScript(tab);
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch (error) {
+    if (!isMissingReceiverError(error)) throw error;
+    await injectContentScript(tab.id);
+    return chrome.tabs.sendMessage(tab.id, message);
+  }
+}
+
+async function injectIntoOpenTabs() {
+  const tabs = await listChatGptTabs();
+  await Promise.allSettled(tabs.map(tab => ensureContentScript(tab)));
 }
 
 async function cachedResult(commandId) {
@@ -87,13 +166,13 @@ async function executeCommand(message) {
   const prior = await cachedResult(message.command_id);
   if (prior) return prior;
   const tab = await findChatGptTab();
-  const response = await chrome.tabs.sendMessage(tab.id, {
+  const response = await sendToChatGpt(tab, {
     type: 'aliver.director.command',
     commandId: message.command_id,
     commandType: message.command_type,
     payload: message.payload || {},
   });
-  if (!response) throw new Error('ChatGPT content script did not return a result. Reload the ChatGPT tab.');
+  if (!response) throw new Error('ChatGPT page controller did not return a result.');
   const result = {
     ok: Boolean(response.ok),
     data: response.data || {},
@@ -107,7 +186,7 @@ async function sendPageStatus() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   try {
     const tab = await findChatGptTab();
-    const page = await chrome.tabs.sendMessage(tab.id, { type: 'aliver.page.status' });
+    const page = await sendToChatGpt(tab, { type: 'aliver.page.status' });
     socket.send(JSON.stringify({
       type: 'page.status',
       url: tab.url || '',
@@ -168,6 +247,7 @@ async function connectSocket() {
         runtime_id: chrome.runtime.id,
       },
     }));
+    await injectIntoOpenTabs();
     await sendPageStatus();
     keepAliveTimer = setInterval(() => sendPageStatus(), 20000);
   };
@@ -217,6 +297,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-chrome.runtime.onInstalled.addListener(() => connectSocket());
-chrome.runtime.onStartup.addListener(() => connectSocket());
-connectSocket();
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete' || !isChatGptUrl(tab.url || '')) return;
+  ensureContentScript({ ...tab, id: tabId })
+    .then(() => sendPageStatus())
+    .catch(console.debug);
+});
+
+async function initializeExtension() {
+  await injectIntoOpenTabs();
+  await connectSocket();
+}
+
+chrome.runtime.onInstalled.addListener(() => initializeExtension().catch(console.error));
+chrome.runtime.onStartup.addListener(() => initializeExtension().catch(console.error));
+initializeExtension().catch(console.error);
