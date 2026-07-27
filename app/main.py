@@ -198,6 +198,13 @@ async def extension_websocket(
                             ),
                             details={"command_id": command.id, "extension_id": extension_id},
                         )
+                        await websocket.send_json(
+                            {
+                                "type": "command.result.ack",
+                                "command_id": command.id,
+                                "status": command.status,
+                            }
+                        )
                 else:
                     db.commit()
     except WebSocketDisconnect:
