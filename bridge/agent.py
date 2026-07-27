@@ -18,10 +18,12 @@ import websockets
 
 try:
     from bridge.audio_capture import AudioCaptureManager
+    from bridge.gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
 except ModuleNotFoundError:
     from audio_capture import AudioCaptureManager
+    from gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
 
-BRIDGE_VERSION = "0.3.0"
+BRIDGE_VERSION = "0.3.1"
 BASE_DIR = Path(__file__).resolve().parent
 STATE_FILE = BASE_DIR / "state.json"
 LOCAL_CONFIG = BASE_DIR / "bridge.local.json"
@@ -249,10 +251,9 @@ class BridgeAgent:
             return await asyncio.to_thread(self.audio.stop)
         if command_type == "audio.gpt_in.test":
             return await asyncio.to_thread(
-                self.audio.play_gpt_in_test_tone,
-                duration_seconds=float(payload.get("duration_seconds", 2.0)),
-                frequency_hz=float(payload.get("frequency_hz", 660.0)),
-                volume=float(payload.get("volume", 0.18)),
+                play_gpt_in_test_speech,
+                self.audio,
+                text=str(payload.get("text") or DEFAULT_TEST_TEXT),
             )
 
         if command_type == "provider.start_session":
