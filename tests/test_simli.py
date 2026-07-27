@@ -5,7 +5,7 @@ import pytest
 
 from app.providers.base import ProviderContext
 from app.providers.simli import SimliProvider
-from bridge.simli_session import Pcm16ToSimliConverter, SIMLI_SAMPLE_RATE
+from bridge.simli_session import SIMLI_SAMPLE_RATE, Pcm16ToSimliConverter
 
 
 def make_stereo_pcm(sample_rate: int, seconds: float = 1.0) -> bytes:
