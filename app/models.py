@@ -101,6 +101,48 @@ class DirectorCommand(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class AutoDirectorConfig(Base):
+    __tablename__ = "auto_director_configs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    extension_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("browser_extensions.id"), unique=True, index=True
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="rules")
+    api_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    credentials_encrypted: Mapped[str] = mapped_column(Text, default="")
+    settings_json: Mapped[str] = mapped_column(Text, default="{}")
+    last_dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_idle_prompt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AudienceEvent(Base):
+    __tablename__ = "audience_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    config_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("auto_director_configs.id"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(32), default="comment", index=True)
+    platform: Mapped[str] = mapped_column(String(40), default="manual", index=True)
+    user_name: Mapped[str] = mapped_column(String(160), default="观众")
+    content: Mapped[str] = mapped_column(Text, default="")
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    score: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_command_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class EventLog(Base):
     __tablename__ = "event_logs"
 
