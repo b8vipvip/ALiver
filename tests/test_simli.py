@@ -5,7 +5,12 @@ import pytest
 
 from app.providers.base import ProviderContext
 from app.providers.simli import SimliProvider
-from bridge.simli_session import SIMLI_SAMPLE_RATE, Pcm16ToSimliConverter
+from bridge.simli_session import (
+    SIMLI_SAMPLE_RATE,
+    Pcm16ToSimliConverter,
+    classify_simli_failure,
+    exception_chain,
+)
 
 
 def make_stereo_pcm(sample_rate: int, seconds: float = 1.0) -> bytes:
@@ -26,6 +31,32 @@ def test_pcm_converter_outputs_16khz_mono_pcm16():
     assert abs(len(output) - expected_bytes) <= 4
     assert len(output) % 2 == 0
     assert max(array("h", output)) > 5000
+
+
+def test_simli_diagnostics_identifies_missing_livekit_dependency():
+    exc = RuntimeError(
+        'livekit not installed, please pip install "simli-ai[livekit]" to use livekit transport'
+    )
+    detail = classify_simli_failure(
+        exc,
+        phase="sdk_import",
+        diagnostics={"transport": "livekit", "livekit_module_available": False},
+    )
+    assert detail["code"] == "SIMLI_LIVEKIT_DEPENDENCY_MISSING"
+    assert "LiveKit" in detail["message_zh"]
+    assert "pip install" in " ".join(detail["suggestions"])
+
+
+def test_exception_chain_keeps_original_sdk_reason():
+    try:
+        try:
+            raise ModuleNotFoundError("No module named 'livekit'")
+        except ModuleNotFoundError as inner:
+            raise RuntimeError("Failed To Initialize SimliClient") from inner
+    except RuntimeError as outer:
+        values = exception_chain(outer)
+    assert values[0] == "RuntimeError: Failed To Initialize SimliClient"
+    assert "No module named 'livekit'" in values[1]
 
 
 @pytest.mark.asyncio
@@ -104,4 +135,4 @@ def test_simli_provider_api_redacts_key_and_requires_bridge(client):
         json={"provider_config_id": body["id"], "overrides": {}},
     )
     assert session.status_code == 422
-    assert "bridge_id" in session.text
+    assert "Bridge" in session.text
