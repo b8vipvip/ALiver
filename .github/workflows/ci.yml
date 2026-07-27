@@ -23,6 +23,7 @@ jobs:
       - run: node --check chrome_extension/background.js
       - run: node --check chrome_extension/content.js
       - run: node --check chrome_extension/popup.js
+      - run: node --check app/static/auto_director.js
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
       - run: ruff check app bridge tests
