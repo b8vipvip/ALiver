@@ -31,7 +31,7 @@
       <button data-tab="providers" class="active">供应商</button>
       <button data-tab="sessions">会话</button>
       <button data-tab="bridges">Bridge</button>
-      <button data-tab="audio">音频</button>
+      <button data-tab="audio">音频路由</button>
       <button data-tab="logs">日志</button>
     </nav>
 
@@ -89,52 +89,87 @@
     </section>
 
     <section id="tab-audio" class="tab-panel">
-      <div class="grid two">
-        <article class="panel">
-          <h2>ChatGPT 音频捕获</h2>
-          <p class="hint">扫描 Windows WASAPI 设备，选择 Chrome/ChatGPT 所在的扬声器回放设备。</p>
-          <label>执行 Bridge
-            <select id="audio-bridge"><option value="">请选择在线 Bridge</option></select>
-          </label>
-          <div class="actions">
-            <button id="audio-scan" type="button">扫描音频设备</button>
-            <button id="audio-status" type="button" class="secondary">读取状态</button>
+      <article class="panel route-intro">
+        <div class="section-title">
+          <div>
+            <h2>GPT_IN / GPT_OUT 双虚拟声卡</h2>
+            <p class="hint">GPT_OUT：ChatGPT 回答 → 数字人。GPT_IN：弹幕/连线内部音频 → ChatGPT。两条通道必须使用不同虚拟声卡。</p>
           </div>
-          <label>捕获设备
-            <select id="audio-device"><option value="">请先扫描设备</option></select>
-          </label>
-          <label>测试 WAV 时长（秒）
-            <input id="audio-wav-seconds" type="number" min="1" max="60" value="10">
-          </label>
-          <label class="check-row">
-            <input id="audio-save-wav" type="checkbox" checked>
-            保存一份测试 WAV 到 <code>bridge\captures</code>
-          </label>
-          <div class="actions">
-            <button id="audio-start" type="button">开始捕获</button>
-            <button id="audio-stop" type="button" class="danger">停止捕获</button>
+          <span id="route-ready-badge" class="badge warn">未检测</span>
+        </div>
+        <label>执行 Bridge
+          <select id="audio-bridge"><option value="">请选择在线 Bridge</option></select>
+        </label>
+        <div class="actions">
+          <button id="route-scan" type="button">扫描虚拟声卡</button>
+          <button id="route-auto" type="button" class="secondary">自动推荐并保存</button>
+          <button id="route-refresh" type="button" class="secondary">读取已保存路由</button>
+        </div>
+      </article>
+
+      <div class="grid two route-grid">
+        <article class="panel route-card route-out">
+          <div class="route-title">
+            <div><span class="route-kicker">OUTPUT</span><h2>GPT_OUT</h2></div>
+            <span id="gpt-out-badge" class="badge warn">未配置</span>
           </div>
-          <p class="hint">第一版按“输出设备回放”捕获，因此会录到该设备上的全部系统声音。建议先把 Chrome 单独输出到 VB-CABLE。</p>
+          <p class="hint">在 Windows“应用音量和设备首选项”里，把 Chrome 输出设置到该虚拟扬声器。ALiver 捕获它的 Loopback。</p>
+          <label>ChatGPT 输出捕获设备
+            <select id="gpt-out-device"><option value="">请先扫描</option></select>
+          </label>
+          <div class="route-instruction">
+            <strong>Windows 应设置 Chrome 输出为：</strong>
+            <code id="gpt-out-playback-hint">尚未匹配</code>
+          </div>
+
+          <h3>GPT_OUT 捕获测试</h3>
+          <div class="inline-fields">
+            <label>测试时长（秒）<input id="gpt-out-seconds" type="number" min="3" max="60" value="10"></label>
+            <label class="check-row"><input id="gpt-out-save-wav" type="checkbox" checked>保存 WAV</label>
+          </div>
+          <div class="actions">
+            <button id="gpt-out-start" type="button">开始 10 秒自动测试</button>
+            <button id="gpt-out-stop" type="button" class="danger">立即停止</button>
+          </div>
+          <div class="audio-meter" aria-label="GPT_OUT 实时音量"><div id="gpt-out-meter-fill"></div></div>
+          <div class="audio-levels">
+            <span>当前 <strong id="gpt-out-dbfs">-96.0 dBFS</strong></span>
+            <span>最大 <strong id="gpt-out-max-dbfs">-96.0 dBFS</strong></span>
+            <span>时长 <strong id="gpt-out-elapsed">0.0 秒</strong></span>
+          </div>
+          <div id="gpt-out-diagnosis" class="diagnosis warn">尚未测试。</div>
+          <pre id="gpt-out-status-json">尚未读取状态。</pre>
         </article>
 
-        <article class="panel">
-          <div class="section-title"><h2>实时状态</h2><span id="audio-state-badge" class="badge warn">未启动</span></div>
-          <div class="audio-meter" aria-label="实时音量">
-            <div id="audio-meter-fill"></div>
+        <article class="panel route-card route-in">
+          <div class="route-title">
+            <div><span class="route-kicker">INPUT</span><h2>GPT_IN</h2></div>
+            <span id="gpt-in-badge" class="badge warn">未配置</span>
           </div>
-          <div class="audio-levels">
-            <span>电平 <strong id="audio-dbfs">-96.0 dBFS</strong></span>
-            <span>时长 <strong id="audio-elapsed">0.0 秒</strong></span>
+          <p class="hint">ALiver 后续把弹幕 TTS 和连线声音写入该虚拟扬声器；ChatGPT Live 的麦克风选择与它配对的虚拟麦克风。</p>
+          <label>内部音频写入设备
+            <select id="gpt-in-device"><option value="">请先扫描</option></select>
+          </label>
+          <div class="route-instruction">
+            <strong>ChatGPT Live 麦克风应选择：</strong>
+            <code id="gpt-in-microphone-hint">尚未匹配</code>
           </div>
-          <pre id="audio-status-json">尚未读取状态。</pre>
+          <div class="actions">
+            <button id="gpt-in-test" type="button">发送 2 秒测试音</button>
+          </div>
+          <p class="hint">测试时打开 ChatGPT Live 的麦克风电平；无需插入物理麦克风。</p>
+          <pre id="gpt-in-test-json">尚未发送测试音。</pre>
 
-          <h3>可捕获设备</h3>
-          <div id="audio-device-list" class="device-list"><p class="hint">尚未扫描。</p></div>
-
-          <h3>输出设备参考</h3>
-          <div id="audio-output-list" class="device-list"><p class="hint">尚未扫描。</p></div>
+          <h3>保存路由</h3>
+          <button id="route-save" type="button">保存 GPT_IN / GPT_OUT</button>
+          <div id="route-warning-list" class="warning-list"></div>
         </article>
       </div>
+
+      <article class="panel">
+        <div class="section-title"><h2>检测到的虚拟声卡配对</h2><span class="hint">只展示软件虚拟设备；物理麦克风不会用于本方案。</span></div>
+        <div id="virtual-pair-list" class="pair-list"><p class="hint">尚未扫描。</p></div>
+      </article>
     </section>
 
     <section id="tab-logs" class="tab-panel">
