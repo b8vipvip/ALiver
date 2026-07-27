@@ -171,6 +171,9 @@ async def extension_websocket(
                     incoming = message.get("metadata") or {}
                     if isinstance(incoming, dict):
                         metadata.update(incoming)
+                        reported_version = incoming.get("extension_version")
+                        if reported_version:
+                            extension.version = str(reported_version)[:40]
                     extension.metadata_json = dumps(metadata)
                     if message.get("url"):
                         extension.active_tab_url = str(message["url"])[:1000]
