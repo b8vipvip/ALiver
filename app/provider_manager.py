@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Type
-
 from app.json_utils import loads
 from app.models import ProviderConfig
 from app.providers import PROVIDER_CLASSES
@@ -9,7 +7,7 @@ from app.providers.base import AvatarProvider, ProviderContext
 from app.security import decrypt_json
 
 
-def provider_class(provider_type: str) -> Type[AvatarProvider]:
+def provider_class(provider_type: str) -> type[AvatarProvider]:
     try:
         return PROVIDER_CLASSES[provider_type]
     except KeyError as exc:
