@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    provider_type: str = Field(pattern="^(mock|tavus|akool|liveavatar)$")
+    provider_type: str = Field(pattern="^(mock|tavus|akool|liveavatar|simli)$")
     enabled: bool = True
     api_base_url: str | None = None
     credentials: dict[str, Any] = Field(default_factory=dict)
