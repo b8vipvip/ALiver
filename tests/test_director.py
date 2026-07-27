@@ -54,6 +54,10 @@ def test_extension_receives_queued_command_and_reports_result(client):
                 "data": {"sent": True},
             }
         )
+        ack = websocket.receive_json()
+        assert ack["type"] == "command.result.ack"
+        assert ack["command_id"] == command["id"]
+        assert ack["status"] == "completed"
 
     rows = client.get("/api/director/commands").json()
     row = next(item for item in rows if item["id"] == command["id"])
