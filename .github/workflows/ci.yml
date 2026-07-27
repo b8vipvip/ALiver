@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - run: node --check chrome_extension/background.js
+      - run: node --check chrome_extension/content.js
+      - run: node --check chrome_extension/popup.js
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
       - run: ruff check app bridge tests
