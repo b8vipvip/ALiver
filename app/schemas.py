@@ -150,6 +150,84 @@ class DirectorCommandOut(BaseModel):
     completed_at: datetime | None
 
 
+class AutoDirectorConfigUpsert(BaseModel):
+    extension_id: str
+    enabled: bool = False
+    mode: str = Field(default="rules", pattern="^(rules|openai_compatible)$")
+    api_base_url: str | None = Field(default=None, max_length=500)
+    model_name: str | None = Field(default=None, max_length=200)
+    api_key: str | None = Field(default=None, max_length=2000)
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class AutoDirectorConfigOut(BaseModel):
+    id: str | None
+    extension_id: str
+    enabled: bool
+    mode: str
+    api_base_url: str | None
+    model_name: str | None
+    credential_keys: list[str]
+    settings: dict[str, Any]
+    last_dispatched_at: datetime | None
+    last_idle_prompt_at: datetime | None
+    last_event_at: datetime | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
+
+class AudienceEventCreate(BaseModel):
+    extension_id: str
+    event_type: str = Field(default="comment", pattern="^(comment|gift|follow|like|share|system)$")
+    platform: str = Field(default="manual", max_length=40)
+    user_name: str = Field(default="观众", max_length=160)
+    content: str = Field(default="", max_length=2000)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AudienceEventOut(BaseModel):
+    id: str
+    config_id: str
+    event_type: str
+    platform: str
+    user_name: str
+    content: str
+    payload: dict[str, Any]
+    status: str
+    score: int
+    reason: str | None
+    selected_command_id: str | None
+    processed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AutoDirectorProcessOut(BaseModel):
+    processed: bool
+    action: str | None = None
+    event_id: str | None = None
+    command_id: str | None = None
+    priority: int | None = None
+    reason: str
+
+
+class AutoDirectorStatusOut(BaseModel):
+    extension_id: str
+    configured: bool
+    enabled: bool
+    mode: str
+    extension_connected: bool
+    chatgpt_open: bool
+    composer_ready: bool
+    generating: bool
+    queued_events: int
+    selected_events: int
+    ignored_events: int
+    pending_commands: int
+    last_dispatched_at: datetime | None
+    last_event_at: datetime | None
+
+
 class LogOut(BaseModel):
     id: int
     level: str
