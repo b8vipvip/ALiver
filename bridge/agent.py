@@ -19,11 +19,13 @@ import websockets
 try:
     from bridge.audio_capture import AudioCaptureManager
     from bridge.gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
+    from bridge.simli_session import SimliSessionManager
 except ModuleNotFoundError:
     from audio_capture import AudioCaptureManager
     from gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
+    from simli_session import SimliSessionManager
 
-BRIDGE_VERSION = "0.3.1"
+BRIDGE_VERSION = "0.4.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATE_FILE = BASE_DIR / "state.json"
 LOCAL_CONFIG = BASE_DIR / "bridge.local.json"
@@ -42,6 +44,7 @@ class BridgeAgent:
         self.state = self.load_state()
         self.processes: dict[str, ManagedProcess] = {}
         self.audio = AudioCaptureManager()
+        self.simli = SimliSessionManager(self.audio)
         self.stop_event = asyncio.Event()
 
     def load_config(self) -> dict[str, Any]:
@@ -88,6 +91,7 @@ class BridgeAgent:
             "audio.capture.status",
             "audio.capture.stop",
             "provider.liveavatar.placeholder",
+            "provider.simli.realtime",
         ]
 
     async def register(self) -> None:
@@ -145,6 +149,7 @@ class BridgeAgent:
             "pid": os.getpid(),
             "bridge_version": BRIDGE_VERSION,
             "audio_capture": self.audio.status(),
+            "simli_sessions": self.simli.status(),
         }
 
     async def run(self) -> None:
@@ -293,26 +298,43 @@ class BridgeAgent:
         return {"process_id": process_id, "stopped": True}
 
     async def start_provider_session(self, payload: dict[str, Any]) -> dict[str, Any]:
-        provider_type = payload.get("provider_type")
-        if provider_type != "liveavatar":
-            raise ValueError(f"Bridge-managed provider not implemented: {provider_type}")
+        provider_type = str(payload.get("provider_type") or "")
         plan = payload.get("provider_plan") or {}
         config = plan.get("config") or {}
-        return {
-            "status": "awaiting_manual",
-            "external_session_id": None,
-            "message": (
-                "LiveAvatar Bridge connector scaffold is active. "
-                "The GPT_OUT route will become its PCM source in the provider phase."
-            ),
-            "config_received": {
-                "avatar_id": config.get("avatar_id"),
-                "transport": config.get("transport"),
-                "mode": config.get("mode", "LITE"),
-            },
-        }
+        session_id = str(payload.get("session_id") or "")
+        if not session_id:
+            raise ValueError("provider.start_session requires session_id")
+
+        if provider_type == "simli":
+            status = await self.simli.start(session_id, config)
+            return {
+                **status,
+                "external_session_id": session_id,
+                "message": (
+                    "Simli is receiving GPT_OUT audio. Capture the local avatar window in your streaming software."
+                ),
+            }
+        if provider_type == "liveavatar":
+            return {
+                "status": "awaiting_manual",
+                "external_session_id": None,
+                "message": (
+                    "LiveAvatar Bridge connector scaffold is active. "
+                    "The GPT_OUT route will become its PCM source in the provider phase."
+                ),
+                "config_received": {
+                    "avatar_id": config.get("avatar_id"),
+                    "transport": config.get("transport"),
+                    "mode": config.get("mode", "LITE"),
+                },
+            }
+        raise ValueError(f"Bridge-managed provider not implemented: {provider_type}")
 
     async def stop_provider_session(self, payload: dict[str, Any]) -> dict[str, Any]:
+        provider_type = str(payload.get("provider_type") or "")
+        session_id = str(payload.get("session_id") or "")
+        if provider_type == "simli":
+            return await self.simli.stop(session_id)
         return {"status": "ended", "message": "Bridge session resources released"}
 
 
@@ -327,6 +349,7 @@ async def main() -> None:
     try:
         await agent.run()
     finally:
+        await agent.simli.stop_all()
         await asyncio.to_thread(agent.audio.shutdown)
 
 

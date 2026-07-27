@@ -30,3 +30,39 @@
     }
   });
 })();
+
+(() => {
+  const form = document.getElementById('provider-form');
+  const typeSelect = form?.querySelector('[name="provider_type"]');
+  if (!form || !typeSelect || [...typeSelect.options].some(option => option.value === 'simli')) return;
+
+  typeSelect.insertAdjacentHTML('beforeend', '<option value="simli">Simli（推荐）</option>');
+  const helper = document.createElement('button');
+  helper.type = 'button';
+  helper.className = 'secondary';
+  helper.textContent = '填入 Simli 推荐模板';
+  helper.addEventListener('click', () => {
+    typeSelect.value = 'simli';
+    form.querySelector('[name="name"]').value = 'Simli Realtime';
+    form.querySelector('[name="api_base_url"]').value = 'https://api.simli.ai';
+    form.querySelector('[name="credentials"]').value = JSON.stringify({ api_key: '' }, null, 2);
+    form.querySelector('[name="settings"]').value = JSON.stringify({
+      face_id: '',
+      transport: 'livekit',
+      model: 'fasttalk',
+      handle_silence: true,
+      max_session_length: 3600,
+      max_idle_time: 300,
+      window_title: 'ALiver Simli Avatar',
+      window_size: [720, 720],
+      always_on_top: false,
+      play_return_audio: true,
+    }, null, 2);
+    toast('已填入 Simli 模板。请填写 api_key 和 face_id 后保存。');
+  });
+  form.querySelector('button[type="submit"]').before(helper);
+
+  const bridgeSelect = document.getElementById('session-bridge');
+  const bridgeLabel = bridgeSelect?.closest('label');
+  if (bridgeLabel?.firstChild) bridgeLabel.firstChild.textContent = 'Bridge（Simli / LiveAvatar 必选）';
+})();
