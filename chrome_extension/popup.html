@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALiver Controller</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>ALiver Controller</h1>
+    <p class="hint">把服务端导演指令发送到当前 ChatGPT 对话。</p>
+    <label>服务端地址<input id="server-url" value="http://127.0.0.1:8765"></label>
+    <label>扩展名称<input id="extension-name" value="ALiver ChatGPT Controller"></label>
+    <label>ALiver 管理令牌<input id="admin-token" type="password" placeholder="X-ALiver-Token"></label>
+    <div class="actions">
+      <button id="pair">配对并连接</button>
+      <button id="reconnect" class="secondary">重新连接</button>
+    </div>
+    <section id="status">正在读取状态…</section>
+    <button id="open-dashboard" class="link">打开 ALiver 控制台</button>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
