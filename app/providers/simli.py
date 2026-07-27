@@ -56,7 +56,7 @@ class SimliProvider(AvatarProvider):
             "always_on_top": bool(values.get("always_on_top", False)),
             "play_return_audio": bool(values.get("play_return_audio", True)),
             "audio_output_device_index": values.get("audio_output_device_index"),
-            "retry_count": max(0, min(int(values.get("retry_count", 2)), 8)),
+            "retry_count": max(1, min(int(values.get("retry_count", 2)), 8)),
             "retry_timeout": max(1.0, min(float(values.get("retry_timeout", 8.0)), 60.0)),
         }
 
