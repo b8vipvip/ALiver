@@ -28,9 +28,7 @@ class ProviderConfig(Base):
     credentials_encrypted: Mapped[str] = mapped_column(Text, default="")
     settings_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class BridgeAgent(Base):
@@ -46,18 +44,30 @@ class BridgeAgent(Base):
     status: Mapped[str] = mapped_column(String(32), default="offline", index=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class BrowserExtension(Base):
+    __tablename__ = "browser_extensions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    browser_name: Mapped[str] = mapped_column(String(80), default="Chrome")
+    version: Mapped[str] = mapped_column(String(40), default="unknown")
+    token_hash: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(32), default="offline", index=True)
+    active_tab_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class AvatarSession(Base):
     __tablename__ = "avatar_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    provider_config_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("provider_configs.id"), index=True
-    )
+    provider_config_id: Mapped[str] = mapped_column(String(36), ForeignKey("provider_configs.id"), index=True)
     bridge_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("bridge_agents.id"), nullable=True, index=True
     )
@@ -69,9 +79,26 @@ class AvatarSession(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class DirectorCommand(Base):
+    __tablename__ = "director_commands"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    extension_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("browser_extensions.id"), index=True
     )
+    command_type: Mapped[str] = mapped_column(String(40), default="send_text", index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=50, index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class EventLog(Base):
