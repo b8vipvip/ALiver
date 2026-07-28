@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import bisect
 import ctypes
 import time
@@ -7,7 +8,7 @@ from collections import deque
 from typing import Any
 
 from bridge import simli_diagnostics, simli_waveout
-from bridge.runtime_diagnostics import event
+from bridge.runtime_diagnostics import event, exception
 
 
 def fast_interpolate(samples: list[tuple[float, float]], at: float) -> float | None:
@@ -47,7 +48,9 @@ def lightweight_renderer_status(renderer: Any) -> dict[str, Any]:
     except Exception:
         audio_clock = 0.0
 
-    source_fps = simli_diagnostics.median_fps(_recent(getattr(renderer, "_diag_video_pts_deltas", ())))
+    source_fps = simli_diagnostics.median_fps(
+        _recent(getattr(renderer, "_diag_video_pts_deltas", ()))
+    )
     receive_fps = simli_diagnostics.median_fps(
         _recent(getattr(renderer, "_diag_video_arrival_deltas", ()))
     )
@@ -58,20 +61,27 @@ def lightweight_renderer_status(renderer: Any) -> dict[str, Any]:
         _recent(getattr(renderer, "_diag_speed_samples", ()), 360)
     )
     cached_report = getattr(renderer, "_diag_last_report", None)
-    report = dict(cached_report) if isinstance(cached_report, dict) else {
-        "conclusion_zh": "实时状态使用轻量快照；完整相关性分析仅在主动诊断时执行。",
-        "estimated_lip_sync_offset_ms": None,
-        "first_onset_offset_ms": None,
-        "correlation_confidence": "insufficient",
-    }
+    if isinstance(cached_report, dict):
+        report = dict(cached_report)
+    else:
+        report = {
+            "conclusion_zh": "实时状态使用轻量快照；完整相关性分析仅在主动诊断时执行。",
+            "estimated_lip_sync_offset_ms": None,
+            "first_onset_offset_ms": None,
+            "correlation_confidence": "insufficient",
+        }
 
+    audio_buffer_seconds = float(
+        getattr(renderer, "_audio_buffer_seconds", 0.0) or 0.0
+    )
+    last_video_clock = float(getattr(renderer, "_last_video_clock", 0.0) or 0.0)
     values.update(
         {
-            "audio_buffer_ms": round(float(getattr(renderer, "_audio_buffer_seconds", 0.0) or 0.0) * 1000, 1),
+            "audio_buffer_ms": round(audio_buffer_seconds * 1000, 1),
             "audio_queue_size": audio_queue.qsize() if audio_queue is not None else 0,
             "video_queue_size": video_queue.qsize() if video_queue is not None else 0,
             "audio_clock_seconds": round(audio_clock, 3),
-            "video_clock_seconds": round(float(getattr(renderer, "_last_video_clock", 0.0) or 0.0), 3),
+            "video_clock_seconds": round(last_video_clock, 3),
             "video_clock_mode": (getattr(renderer, "_tuning", {}) or {}).get(
                 "clock_mode", getattr(renderer, "_diag_clock_mode", "unknown")
             ),
@@ -98,7 +108,8 @@ def lightweight_renderer_status(renderer: Any) -> dict[str, Any]:
         values["sync_health"] = "bad"
     started = float(getattr(renderer, "_started_monotonic", time.monotonic()))
     elapsed = max(0.001, time.monotonic() - started)
-    values["render_fps"] = round(float(values.get("video_frames_rendered") or 0) / elapsed, 2)
+    rendered = float(values.get("video_frames_rendered") or 0)
+    values["render_fps"] = round(rendered / elapsed, 2)
     return values
 
 
@@ -143,9 +154,11 @@ class BufferedWindowsWaveOutStream(simli_waveout.WindowsWaveOutStream):
                     size,
                 )
             )
-            if code == simli_waveout.WAVERR_STILLPLAYING and not force:
+            if code == simli_waveout.WAVERR_STILLPLAYING:
+                if force:
+                    time.sleep(0.001)
                 break
-            if code not in {simli_waveout.MMSYSERR_NOERROR, simli_waveout.WAVERR_STILLPLAYING}:
+            if code != simli_waveout.MMSYSERR_NOERROR:
                 simli_waveout._check(code, "waveOutUnprepareHeader")
             self._pending_buffers.popleft()
             self._pending_seconds = max(0.0, self._pending_seconds - duration)
@@ -188,32 +201,55 @@ class BufferedWindowsWaveOutStream(simli_waveout.WindowsWaveOutStream):
             )
             size = ctypes.sizeof(header)
             simli_waveout._check(
-                int(self._dll.waveOutPrepareHeader(self._handle, ctypes.byref(header), size)),
+                int(
+                    self._dll.waveOutPrepareHeader(
+                        self._handle,
+                        ctypes.byref(header),
+                        size,
+                    )
+                ),
                 "waveOutPrepareHeader",
             )
             try:
                 simli_waveout._check(
-                    int(self._dll.waveOutWrite(self._handle, ctypes.byref(header), size)),
+                    int(
+                        self._dll.waveOutWrite(
+                            self._handle,
+                            ctypes.byref(header),
+                            size,
+                        )
+                    ),
                     "waveOutWrite",
                 )
             except Exception:
-                self._dll.waveOutUnprepareHeader(self._handle, ctypes.byref(header), size)
+                self._dll.waveOutUnprepareHeader(
+                    self._handle,
+                    ctypes.byref(header),
+                    size,
+                )
                 raise
             self._pending_buffers.append((buffer, header, size, duration))
             self._pending_seconds += duration
             self._cleanup_done_locked()
+
+    def _drain_after_reset_locked(self, timeout: float = 1.0) -> None:
+        deadline = time.monotonic() + timeout
+        while self._pending_buffers and time.monotonic() < deadline:
+            self._cleanup_done_locked(force=True)
+            if self._pending_buffers:
+                time.sleep(0.001)
+        if self._pending_buffers:
+            event(
+                "simli_waveout_cleanup_timeout",
+                remaining_buffers=len(self._pending_buffers),
+            )
 
     def stop_stream(self) -> None:
         with self._lock:
             if self._closed or not self._handle:
                 return
             self._dll.waveOutReset(self._handle)
-            deadline = time.monotonic() + 1.0
-            while self._pending_buffers and time.monotonic() < deadline:
-                self._cleanup_done_locked()
-                if self._pending_buffers:
-                    time.sleep(0.001)
-            self._cleanup_done_locked(force=True)
+            self._drain_after_reset_locked()
 
     def close(self) -> None:
         with self._lock:
@@ -221,15 +257,53 @@ class BufferedWindowsWaveOutStream(simli_waveout.WindowsWaveOutStream):
                 return
             if self._handle:
                 self._dll.waveOutReset(self._handle)
-                deadline = time.monotonic() + 1.0
-                while self._pending_buffers and time.monotonic() < deadline:
-                    self._cleanup_done_locked()
-                    if self._pending_buffers:
-                        time.sleep(0.001)
-                self._cleanup_done_locked(force=True)
+                self._drain_after_reset_locked()
                 self._dll.waveOutClose(self._handle)
                 self._handle = ctypes.c_void_p()
             self._closed = True
+
+
+async def fast_renderer_close(renderer: Any) -> None:
+    """Release renderer resources without running a full diagnostic correlation pass."""
+    if renderer.stop_event.is_set() and renderer._metrics.get("status") == "ended":
+        return
+    event("simli_renderer_fast_close_enter")
+    renderer.stop_event.set()
+    current = asyncio.current_task()
+    tasks = list(getattr(renderer, "_tasks", ()))
+    for task in tasks:
+        if task is not current and not task.done():
+            task.cancel()
+    pending = [task for task in tasks if task is not current]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    audio_stream = getattr(renderer, "_audio_stream", None)
+    if audio_stream is not None:
+        try:
+            await asyncio.to_thread(audio_stream.stop_stream)
+        except Exception as exc:
+            exception("simli_fast_close_audio_stop_failed", exc)
+        try:
+            await asyncio.to_thread(audio_stream.close)
+        except Exception as exc:
+            exception("simli_fast_close_audio_close_failed", exc)
+        renderer._audio_stream = None
+
+    audio = getattr(renderer, "_audio", None)
+    if audio is not None:
+        try:
+            await asyncio.to_thread(audio.terminate)
+        except Exception as exc:
+            exception("simli_fast_close_audio_terminate_failed", exc)
+        renderer._audio = None
+
+    try:
+        renderer.cv2.destroyWindow(renderer.window_title)
+    except Exception:
+        pass
+    renderer._metrics["status"] = "ended"
+    event("simli_renderer_fast_close_exit")
 
 
 def install_simli_realtime_fix(renderer_class: type, runtime_class: type) -> None:
@@ -255,6 +329,7 @@ def install_simli_realtime_fix(renderer_class: type, runtime_class: type) -> Non
 
     renderer_class.__init__ = patched_init
     renderer_class.status = lightweight_renderer_status
+    renderer_class.close = fast_renderer_close
     runtime_class.status = lightweight_runtime_status
     renderer_class._aliver_realtime_fix_v1 = True
     runtime_class._aliver_realtime_fix_v1 = True
