@@ -57,8 +57,13 @@
       window_size: [720, 720],
       always_on_top: false,
       play_return_audio: true,
+      auto_live_out: true,
+      audio_output_device_name: '',
+      sync_prebuffer_ms: 350,
+      video_delay_ms: 0,
+      late_video_drop_ms: 180,
     }, null, 2);
-    toast('已填入 Simli 模板。请填写 api_key 和 face_id 后保存。');
+    toast('已填入 Simli 音画同步模板。安装 CABLE-B 后会自动作为 LIVE_OUT。');
   });
   form.querySelector('button[type="submit"]').before(helper);
 
@@ -68,8 +73,77 @@
 })();
 
 (() => {
+  const sessionsTab = document.getElementById('tab-sessions');
+  if (!sessionsTab || document.getElementById('simli-sync-panel')) return;
+  const panel = document.createElement('article');
+  panel.id = 'simli-sync-panel';
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="section-title">
+      <div>
+        <h2>Simli 音画同步 / LIVE_OUT</h2>
+        <p class="hint">音频作为主时钟，视频按音频播放进度显示；优先自动输出到 CABLE-B Input。</p>
+      </div>
+      <button id="simli-sync-refresh" type="button" class="secondary">读取状态</button>
+    </div>
+    <div id="simli-sync-status" class="diagnosis warn">尚未读取 Simli 同步状态。</div>
+    <pre id="simli-sync-json">启动 Simli 会话后读取状态。</pre>
+  `;
+  sessionsTab.appendChild(panel);
+
+  function onlineBridgeId() {
+    const selected = document.getElementById('session-bridge')?.value;
+    if (selected) return selected;
+    return (state.bridges || []).find(bridge => bridge.connected)?.id || '';
+  }
+
+  function renderSync(value) {
+    const sessions = Object.values(value || {});
+    const current = sessions.find(row => ['active', 'starting'].includes(row?.status)) || sessions[0];
+    const sync = current?.av_sync;
+    const status = document.getElementById('simli-sync-status');
+    const output = document.getElementById('simli-sync-json');
+    output.textContent = JSON.stringify(value || {}, null, 2);
+    if (!current) {
+      status.textContent = '当前 Bridge 没有 Simli 会话。';
+      status.className = 'diagnosis warn';
+      return;
+    }
+    if (!sync) {
+      status.textContent = `会话状态：${current.status}；等待同步器上报。`;
+      status.className = 'diagnosis warn';
+      return;
+    }
+    const health = sync.sync_health || sync.status;
+    status.textContent = [
+      `同步：${health}`,
+      `偏差：${Number(sync.av_offset_ms || 0).toFixed(1)} ms`,
+      `帧率：${Number(sync.render_fps || 0).toFixed(1)} FPS`,
+      `LIVE_OUT：${sync.audio_output_device || '未播放'}`,
+      sync.warning || '',
+    ].filter(Boolean).join(' · ');
+    status.className = `diagnosis ${health === 'good' ? 'good' : health === 'bad' ? 'bad' : 'warn'}`;
+  }
+
+  async function refresh() {
+    const bridgeId = onlineBridgeId();
+    if (!bridgeId) throw new Error('没有在线 Bridge');
+    const data = await sendBridgeCommand(bridgeId, 'provider.simli.status', {}, 12);
+    renderSync(data);
+  }
+
+  document.getElementById('simli-sync-refresh').addEventListener('click', () => {
+    refresh().catch(error => toast(error.message, true));
+  });
+
+  setInterval(() => {
+    if (sessionsTab.classList.contains('active')) refresh().catch(() => {});
+  }, 2000);
+})();
+
+(() => {
   const script = document.createElement('script');
-  script.src = '/static/diagnostics_zh.js?v=0.6.1';
+  script.src = '/static/diagnostics_zh.js?v=0.7.0';
   script.defer = true;
   document.head.appendChild(script);
 })();
