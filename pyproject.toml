@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.7.2"
+version = "0.8.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,3 +48,4 @@ ignore = ["B008"]
 "bridge/simli_sync.py" = ["B039"]
 "bridge/simli_diagnostics.py" = ["I001"]
 "bridge/runtime_diagnostics.py" = ["I001"]
+"bridge/simli_tuning.py" = ["I001"]

@@ -10,6 +10,7 @@ from bridge.simli_diagnostics import (
     timeline_speed_ratio,
 )
 from bridge.simli_sync import clamp, frame_time_seconds, interleaved_pcm16
+from bridge.simli_tuning import build_tuning_recommendation, normalize_tuning
 
 
 class FakeFrame:
@@ -65,18 +66,24 @@ def test_provider_patch_forwards_sync_and_live_out_settings():
                 "sync_prebuffer_ms": 420,
                 "video_delay_ms": 75,
                 "late_video_drop_ms": 210,
+                "video_clock_mode": "source_pts",
+                "target_video_fps": 25,
+                "video_playback_speed": 1.08,
             },
         )
     )
 
     config = provider._runtime_config()
 
-    assert SERVER_VERSION == "0.7.2"
+    assert SERVER_VERSION == "0.8.0"
     assert config["audio_output_device_name"] == "CABLE-B Input (VB-Audio Cable B)"
     assert config["auto_live_out"] is True
     assert config["sync_prebuffer_ms"] == 420
     assert config["video_delay_ms"] == 75
     assert config["late_video_drop_ms"] == 210
+    assert config["video_clock_mode"] == "source_pts"
+    assert config["target_video_fps"] == 25
+    assert config["video_playback_speed"] == 1.08
 
 
 def test_objective_lag_estimator_reports_video_delay():
@@ -117,3 +124,32 @@ def test_slow_motion_and_pts_metrics_are_objective():
     assert "口型比声音晚" in conclusion
     assert any("慢放" in problem for problem in problems)
     assert suggestions
+
+
+def test_tuning_normalization_and_recommendation():
+    normalized = normalize_tuning(
+        {
+            "clock_mode": "invalid",
+            "target_fps": 200,
+            "playback_speed": 0.1,
+            "video_delay_ms": 9000,
+        }
+    )
+    assert normalized["clock_mode"] == "source_pts"
+    assert normalized["target_fps"] == 60
+    assert normalized["playback_speed"] == 0.5
+    assert normalized["video_delay_ms"] == 5000
+
+    recommendation = build_tuning_recommendation(
+        {
+            "wall_lip_sync_offset_ms": -2200.0,
+            "wall_correlation_confidence": "high",
+            "wall_video_speed_ratio": 1.0,
+            "source_pts_fps": 24.0,
+            "scheduler_lateness_ms": 120.0,
+        },
+        normalize_tuning(),
+    )
+    assert recommendation["settings"]["video_delay_ms"] == 2200
+    assert recommendation["settings"]["clock_mode"] == "source_pts"
+    assert recommendation["auto_apply_allowed"] is True
