@@ -37,12 +37,10 @@ def install_link_runtime_timestamps(runtime_class: type) -> None:
                     continue
                 await runtime.client.send(data)
                 now = utc_iso()
-                if not runtime.state.get("first_audio_sent_at"):
+                if not runtime.state.get("first_any_audio_sent_at"):
+                    runtime.state["first_any_audio_sent_at"] = now
+                if runtime.state.get("first_non_silent_input_at") and not runtime.state.get("first_audio_sent_at"):
                     runtime.state["first_audio_sent_at"] = now
-                if runtime.state.get("first_non_silent_input_at") and not runtime.state.get(
-                    "first_non_silent_audio_sent_at"
-                ):
-                    runtime.state["first_non_silent_audio_sent_at"] = now
                 runtime.state["sent_chunks"] += 1
                 runtime.state["sent_bytes"] += len(data)
         except asyncio.CancelledError:
@@ -65,8 +63,8 @@ def install_link_runtime_timestamps(runtime_class: type) -> None:
         runtime.state.setdefault("first_audio_chunk_queued_at", None)
         runtime.state.setdefault("first_non_silent_input_at", None)
         runtime.state.setdefault("first_non_silent_input_dbfs", None)
+        runtime.state.setdefault("first_any_audio_sent_at", None)
         runtime.state.setdefault("first_audio_sent_at", None)
-        runtime.state.setdefault("first_non_silent_audio_sent_at", None)
         result = await original_start(runtime)
         if runtime.capture_thread and runtime.capture_thread.is_alive() and not runtime.state.get("capture_started_at"):
             runtime.state["capture_started_at"] = utc_iso()
