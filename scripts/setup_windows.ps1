@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python Launcher (py.exe) was not found. Install Python 3.10 or newer first."
