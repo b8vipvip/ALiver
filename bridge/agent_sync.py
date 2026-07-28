@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 
 from bridge import agent, simli_session
-from bridge.simli_sync import install_simli_sync_patch
+from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
+from bridge.simli_sync_compat import install_audio_iterator_compat
 
 BRIDGE_VERSION = "0.5.0"
 
 
 def install() -> None:
+    install_audio_iterator_compat(SimliSynchronizedRenderer)
     install_simli_sync_patch(simli_session)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
