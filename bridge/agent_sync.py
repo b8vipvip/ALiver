@@ -11,6 +11,7 @@ os.environ.setdefault("OPENCV_OPENCL_RUNTIME", "disabled")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from bridge import agent, simli_session
+from bridge.bridge_transport_guard import install_bridge_transport_guard
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -29,6 +30,7 @@ from bridge.simli_diagnostics import (
     manager_diagnostic_report,
     run_manager_diagnostic,
 )
+from bridge.simli_fast_status import install_simli_fast_status
 from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
 from bridge.simli_sync_compat import install_audio_iterator_compat
 from bridge.simli_tuning import (
@@ -41,7 +43,7 @@ from bridge.simli_tuning import (
 from bridge.simli_waveout import install_simli_waveout_patch
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.6.2"
+BRIDGE_VERSION = "0.6.3"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -83,6 +85,8 @@ def install() -> None:
     install_simli_tuning_patch(SimliSynchronizedRenderer)
     # Avoid the PyAudioWPatch native defaultInputDevice assertion for Simli return audio.
     install_simli_waveout_patch(SimliSynchronizedRenderer)
+    # Status polling must never run full correlation analysis on the Bridge event loop.
+    install_simli_fast_status(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
@@ -96,9 +100,11 @@ def install() -> None:
             "provider.simli.objective_diagnostics",
             "provider.simli.tuning",
             "provider.simli.tuning.test",
+            "provider.simli.fast_status",
             "audio.live_out.auto",
             "audio.live_out.waveout",
             "bridge.single_instance",
+            "bridge.transport_guard",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
         ):
@@ -192,6 +198,7 @@ def install() -> None:
 
     agent.BridgeAgent.capabilities = staticmethod(capabilities)
     agent.BridgeAgent.execute = execute
+    install_bridge_transport_guard(agent.BridgeAgent)
 
 
 async def main() -> None:
