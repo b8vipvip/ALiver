@@ -37,8 +37,9 @@ from bridge.simli_tuning import (
     manager_run_tuning_test,
     manager_tuning_status,
 )
+from bridge.simli_waveout import install_simli_waveout_patch
 
-BRIDGE_VERSION = "0.6.0"
+BRIDGE_VERSION = "0.6.1"
 
 
 def _attach_recent_events(manager, session_id, report):
@@ -75,6 +76,8 @@ def install() -> None:
     install_simli_crash_guard(SimliSynchronizedRenderer)
     # Install after diagnostics/crash guard so the tuning clock owns the final playback path.
     install_simli_tuning_patch(SimliSynchronizedRenderer)
+    # Avoid the PyAudioWPatch native defaultInputDevice assertion for Simli return audio.
+    install_simli_waveout_patch(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
@@ -89,6 +92,7 @@ def install() -> None:
             "provider.simli.tuning",
             "provider.simli.tuning.test",
             "audio.live_out.auto",
+            "audio.live_out.waveout",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
         ):
