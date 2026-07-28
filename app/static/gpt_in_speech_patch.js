@@ -201,8 +201,9 @@
 
 (() => {
   for (const [src, id] of [
-    ['/static/diagnostics_zh.js?v=0.8.0', 'aliver-diagnostics-zh'],
-    ['/static/simli_tuning.js?v=0.8.0', 'aliver-simli-tuning'],
+    ['/static/diagnostics_zh.js?v=0.9.0', 'aliver-diagnostics-zh'],
+    ['/static/simli_tuning.js?v=0.9.0', 'aliver-simli-tuning'],
+    ['/static/simli_link_diagnostics.js?v=0.9.0', 'aliver-simli-link-diagnostics'],
   ]) {
     if (document.getElementById(id)) continue;
     const script = document.createElement('script');

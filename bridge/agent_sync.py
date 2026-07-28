@@ -31,6 +31,12 @@ from bridge.simli_diagnostics import (
     manager_diagnostic_report,
     run_manager_diagnostic,
 )
+from bridge.simli_link_diagnostics import (
+    install_link_diagnostics,
+    manager_link_report,
+    manager_link_status,
+)
+from bridge.simli_link_runtime import install_link_runtime_timestamps
 from bridge.simli_realtime_fix import install_simli_realtime_fix
 from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
 from bridge.simli_sync_compat import install_audio_iterator_compat
@@ -43,7 +49,7 @@ from bridge.simli_tuning import (
 from bridge.simli_waveout import install_simli_waveout_patch
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.6.4"
+BRIDGE_VERSION = "0.7.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -71,6 +77,11 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
                 "renderer_task_done": bool(runtime.renderer_task and runtime.renderer_task.done()),
                 "sender_task_done": bool(runtime.sender_task and runtime.sender_task.done()),
                 "capture_thread_alive": bool(runtime.capture_thread and runtime.capture_thread.is_alive()),
+                "link_diagnostics": (
+                    getattr(runtime, "_link_diagnostics", None).status()
+                    if getattr(runtime, "_link_diagnostics", None) is not None
+                    else None
+                ),
             }
             for session_id, runtime in sessions.items()
         },
@@ -90,6 +101,9 @@ def install() -> None:
     # Final realtime patch: status is O(1), diagnostics no longer block the event loop,
     # and waveOut keeps multiple short buffers queued for continuous playback.
     install_simli_realtime_fix(SimliSynchronizedRenderer, simli_session.SimliRuntime)
+    # Timestamp GPT_OUT capture/send stages, then start an independent RTC/local link monitor.
+    install_link_runtime_timestamps(simli_session.SimliRuntime)
+    install_link_diagnostics(simli_session.SimliRuntime)
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
@@ -104,6 +118,8 @@ def install() -> None:
             "provider.simli.tuning.test",
             "provider.simli.tuning.lightweight_status",
             "provider.simli.realtime_status",
+            "provider.simli.link_diagnostics",
+            "provider.simli.rtc_stats",
             "audio.live_out.auto",
             "audio.live_out.waveout",
             "audio.live_out.buffered_waveout",
@@ -137,6 +153,16 @@ def install() -> None:
                 )
             if command_type == "provider.simli.status":
                 result = self.simli.status()
+            elif command_type == "provider.simli.link.get":
+                result = manager_link_status(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                )
+            elif command_type == "provider.simli.link.report":
+                result = manager_link_report(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                )
             elif command_type == "provider.simli.diagnostics.report":
                 session_id = str(payload.get("session_id") or "") or None
                 report = manager_diagnostic_report(self.simli, session_id=session_id)
