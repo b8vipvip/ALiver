@@ -34,7 +34,7 @@ class BridgeInstanceLock:
         except Exception:
             pass
 
-    def __enter__(self) -> "BridgeInstanceLock":
+    def __enter__(self) -> BridgeInstanceLock:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
