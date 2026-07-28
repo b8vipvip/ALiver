@@ -7,7 +7,12 @@ label { display: grid; gap: 5px; margin: 10px 0; font-size: 12px; color: #b8c5d6
 input { padding: 9px 10px; border: 1px solid #344255; border-radius: 7px; background: #111a24; color: white; }
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 button { border: 0; border-radius: 7px; padding: 9px 12px; background: #2f80ed; color: white; cursor: pointer; }
+button:disabled { opacity: 0.45; cursor: default; }
 button.secondary { background: #283548; }
 button.link { width: 100%; margin-top: 12px; background: transparent; border: 1px solid #344255; }
-#status { margin-top: 14px; padding: 10px; border: 1px solid #2d3b4d; border-radius: 7px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+#status, #binding-card { margin-top: 14px; padding: 10px; border: 1px solid #2d3b4d; border-radius: 7px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+#binding-card strong { display: block; margin-bottom: 6px; }
+.binding-state { font-weight: 700; margin-bottom: 3px; }
+.binding-state.ok { color: #5ee78b; }
+.binding-state.warn { color: #ffc857; }
 .error { color: #ff8585; }

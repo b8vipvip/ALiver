@@ -29,6 +29,17 @@ function isChatGptUrl(url = '') {
   }
 }
 
+function conversationKey(url = '') {
+  if (!isChatGptUrl(url)) return '';
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    return `${parsed.origin}${pathname}`;
+  } catch (_) {
+    return '';
+  }
+}
+
 function isMissingReceiverError(error) {
   const message = String(error?.message || error || '');
   return /Receiving end does not exist|Could not establish connection/i.test(message);
@@ -41,6 +52,11 @@ async function getConfig() {
     extensionId: '',
     extensionToken: '',
     commandResults: {},
+    boundTabId: null,
+    boundConversationKey: '',
+    boundUrl: '',
+    boundTitle: '',
+    boundAt: null,
   });
 }
 
@@ -105,6 +121,15 @@ async function findChatGptTab() {
   return tabs[0];
 }
 
+async function getTab(tabId) {
+  if (!Number.isInteger(tabId)) return null;
+  try {
+    return await chrome.tabs.get(tabId);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function probeContentScript(tabId) {
   const response = await chrome.tabs.sendMessage(tabId, { type: 'aliver.content.ping' });
   return Boolean(response?.ok);
@@ -150,6 +175,119 @@ async function injectIntoOpenTabs() {
   await Promise.allSettled(tabs.map(tab => ensureContentScript(tab)));
 }
 
+async function bindingStatus() {
+  const config = await getConfig();
+  if (!Number.isInteger(config.boundTabId)) {
+    return {
+      bound: false,
+      valid: false,
+      tabId: null,
+      conversationKey: '',
+      url: '',
+      title: '',
+      boundAt: null,
+      reason: '尚未绑定目标 ChatGPT 会话',
+    };
+  }
+
+  const tab = await getTab(config.boundTabId);
+  if (!tab || !isChatGptUrl(tab.url || '')) {
+    return {
+      bound: true,
+      valid: false,
+      tabId: config.boundTabId,
+      conversationKey: config.boundConversationKey || '',
+      url: config.boundUrl || '',
+      title: config.boundTitle || '',
+      boundAt: config.boundAt || null,
+      reason: '已绑定的 ChatGPT 标签页已关闭或不可用，请重新绑定。',
+    };
+  }
+
+  const currentKey = conversationKey(tab.url || '');
+  const expectedKey = String(config.boundConversationKey || '');
+  const valid = Boolean(currentKey && expectedKey && currentKey === expectedKey);
+  return {
+    bound: true,
+    valid,
+    tabId: tab.id,
+    windowId: tab.windowId,
+    conversationKey: expectedKey,
+    currentConversationKey: currentKey,
+    url: tab.url || config.boundUrl || '',
+    title: tab.title || config.boundTitle || '',
+    boundAt: config.boundAt || null,
+    reason: valid ? '' : '已绑定标签页已经切换到另一个 ChatGPT 会话，请重新绑定当前会话。',
+  };
+}
+
+async function bindChatGptTab(tabId) {
+  const tab = await getTab(Number(tabId));
+  if (!tab || !Number.isInteger(tab.id)) {
+    throw new Error('当前标签页不存在，无法绑定。');
+  }
+  if (!isChatGptUrl(tab.url || '')) {
+    throw new Error('当前标签页不是 ChatGPT。请先切换到需要导演控制的 ChatGPT 语音对话页面。');
+  }
+  const page = await sendToChatGpt(tab, { type: 'aliver.page.status' });
+  if (!page?.ok) {
+    throw new Error(page?.error || '无法读取当前 ChatGPT 页面状态。');
+  }
+  const pageUrl = page.data?.url || tab.url || '';
+  const key = conversationKey(pageUrl);
+  if (!key) throw new Error('无法识别当前 ChatGPT 会话地址。');
+  const boundAt = new Date().toISOString();
+  await chrome.storage.local.set({
+    boundTabId: tab.id,
+    boundConversationKey: key,
+    boundUrl: pageUrl,
+    boundTitle: page.data?.title || tab.title || '',
+    boundAt,
+  });
+  await sendPageStatus();
+  return {
+    bound: true,
+    valid: true,
+    tabId: tab.id,
+    windowId: tab.windowId,
+    conversationKey: key,
+    url: pageUrl,
+    title: page.data?.title || tab.title || '',
+    liveActive: Boolean(page.data?.live_active),
+    boundAt,
+  };
+}
+
+async function clearBinding() {
+  await chrome.storage.local.set({
+    boundTabId: null,
+    boundConversationKey: '',
+    boundUrl: '',
+    boundTitle: '',
+    boundAt: null,
+  });
+  await sendPageStatus();
+  return bindingStatus();
+}
+
+async function resolveCommandTarget() {
+  const config = await getConfig();
+  if (Number.isInteger(config.boundTabId)) {
+    const status = await bindingStatus();
+    if (!status.valid) throw new Error(status.reason || '已绑定的 ChatGPT 会话当前不可用。');
+    const tab = await getTab(config.boundTabId);
+    if (!tab) throw new Error('已绑定的 ChatGPT 标签页已关闭，请重新绑定。');
+    return tab;
+  }
+
+  const tabs = await listChatGptTabs();
+  if (!tabs.length) throw new Error('没有打开 ChatGPT 页面。');
+  if (tabs.length > 1) {
+    throw new Error('检测到多个 ChatGPT 页面。为避免导演指令发错窗口，请在目标语音对话页面点击扩展并选择“绑定当前 ChatGPT 会话”。');
+  }
+  return tabs[0];
+}
+
 async function cachedResult(commandId) {
   const { commandResults = {} } = await getConfig();
   return commandResults[commandId] || null;
@@ -165,7 +303,7 @@ async function rememberResult(commandId, result) {
 async function executeCommand(message) {
   const prior = await cachedResult(message.command_id);
   if (prior) return prior;
-  const tab = await findChatGptTab();
+  const tab = await resolveCommandTarget();
   const response = await sendToChatGpt(tab, {
     type: 'aliver.director.command',
     commandId: message.command_id,
@@ -175,24 +313,57 @@ async function executeCommand(message) {
   if (!response) throw new Error('ChatGPT page controller did not return a result.');
   const result = {
     ok: Boolean(response.ok),
-    data: response.data || {},
+    data: {
+      ...(response.data || {}),
+      target_tab_id: tab.id,
+      target_window_id: tab.windowId,
+      target_conversation_key: conversationKey(tab.url || ''),
+    },
     error: response.error || null,
   };
   await rememberResult(message.command_id, result);
   return result;
 }
 
+async function statusTarget() {
+  const config = await getConfig();
+  if (Number.isInteger(config.boundTabId)) {
+    const status = await bindingStatus();
+    if (!status.valid) return { tab: null, binding: status, tabs: await listChatGptTabs() };
+    return { tab: await getTab(config.boundTabId), binding: status, tabs: await listChatGptTabs() };
+  }
+  const tabs = await listChatGptTabs();
+  if (tabs.length === 1) return { tab: tabs[0], binding: await bindingStatus(), tabs };
+  return { tab: null, binding: await bindingStatus(), tabs };
+}
+
 async function sendPageStatus() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   try {
-    const tab = await findChatGptTab();
-    const page = await sendToChatGpt(tab, { type: 'aliver.page.status' });
+    const target = await statusTarget();
+    if (!target.tab) {
+      socket.send(JSON.stringify({
+        type: 'page.status',
+        url: '',
+        metadata: {
+          chatgpt_open: target.tabs.length > 0,
+          chatgpt_tab_count: target.tabs.length,
+          binding_required: target.tabs.length > 1 && !target.binding.bound,
+          binding: target.binding,
+        },
+      }));
+      return;
+    }
+    const page = await sendToChatGpt(target.tab, { type: 'aliver.page.status' });
     socket.send(JSON.stringify({
       type: 'page.status',
-      url: tab.url || '',
+      url: target.tab.url || '',
       metadata: {
-        tab_title: tab.title || '',
-        chatgpt_tab_id: tab.id,
+        tab_title: target.tab.title || '',
+        chatgpt_tab_id: target.tab.id,
+        chatgpt_window_id: target.tab.windowId,
+        chatgpt_tab_count: target.tabs.length,
+        binding: target.binding,
         ...(page?.data || {}),
       },
     }));
@@ -205,6 +376,13 @@ async function sendPageStatus() {
       },
     }));
   }
+}
+
+async function shouldReportTab(tabId) {
+  const config = await getConfig();
+  if (Number.isInteger(config.boundTabId)) return Number(tabId) === config.boundTabId;
+  const tabs = await listChatGptTabs();
+  return tabs.length === 1 && Number(tabId) === tabs[0]?.id;
 }
 
 async function handleSocketMessage(event) {
@@ -268,17 +446,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'aliver.status') {
-    getConfig().then(config => sendResponse({
-      ok: true,
-      data: {
-        serverUrl: config.serverUrl,
-        extensionName: config.extensionName,
-        extensionId: config.extensionId,
-        pairedAt: config.pairedAt || null,
-        socketState,
-        socketError: config.socketError || '',
-      },
-    }));
+    Promise.all([getConfig(), bindingStatus(), listChatGptTabs()])
+      .then(([config, binding, tabs]) => sendResponse({
+        ok: true,
+        data: {
+          serverUrl: config.serverUrl,
+          extensionName: config.extensionName,
+          extensionId: config.extensionId,
+          pairedAt: config.pairedAt || null,
+          socketState,
+          socketError: config.socketError || '',
+          binding,
+          chatgptTabCount: tabs.length,
+        },
+      }))
+      .catch(error => sendResponse({ ok: false, error: String(error.message || error) }));
+    return true;
+  }
+  if (message.type === 'aliver.bind.tab') {
+    bindChatGptTab(Number(message.payload?.tabId))
+      .then(result => sendResponse({ ok: true, data: result }))
+      .catch(error => sendResponse({ ok: false, error: String(error.message || error) }));
+    return true;
+  }
+  if (message.type === 'aliver.unbind') {
+    clearBinding()
+      .then(result => sendResponse({ ok: true, data: result }))
+      .catch(error => sendResponse({ ok: false, error: String(error.message || error) }));
     return true;
   }
   if (message.type === 'aliver.reconnect') {
@@ -288,11 +482,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === 'aliver.page.status.changed' && socket?.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'page.status',
-      url: sender.tab?.url || '',
-      metadata: message.data || {},
-    }));
+    shouldReportTab(sender.tab?.id)
+      .then(report => {
+        if (!report || !socket || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(JSON.stringify({
+          type: 'page.status',
+          url: sender.tab?.url || '',
+          metadata: {
+            ...(message.data || {}),
+            chatgpt_tab_id: sender.tab?.id ?? null,
+            chatgpt_window_id: sender.tab?.windowId ?? null,
+          },
+        }));
+      })
+      .catch(console.debug);
   }
   return false;
 });
@@ -302,6 +505,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   ensureContentScript({ ...tab, id: tabId })
     .then(() => sendPageStatus())
     .catch(console.debug);
+});
+
+chrome.tabs.onRemoved.addListener(() => {
+  sendPageStatus().catch(console.debug);
 });
 
 async function initializeExtension() {
