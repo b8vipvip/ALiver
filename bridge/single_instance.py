@@ -66,7 +66,7 @@ def try_acquire_bridge_lock(path: Path) -> tuple[BridgeInstanceLock | None, dict
             import fcntl
 
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (OSError, BlockingIOError):
+    except OSError:
         handle.close()
         return None, _read_owner(path)
 
