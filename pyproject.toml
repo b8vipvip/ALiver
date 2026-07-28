@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.7.1"
+version = "0.7.2"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ dependencies = [
   "jinja2>=3.1,<4.0",
   "python-multipart>=0.0.9,<1.0",
   "websockets>=14,<16",
+  "numpy>=1.26,<3",
   "PyAudioWPatch>=0.2.12.8,<0.3; sys_platform == 'win32'",
   "simli-ai[livekit]>=2.0.3,<3.0; sys_platform == 'win32'",
   "opencv-python>=4.10,<5.0; sys_platform == 'win32'",
@@ -46,3 +47,4 @@ ignore = ["B008"]
 "bridge/audio_capture.py" = ["F841"]
 "bridge/simli_sync.py" = ["B039"]
 "bridge/simli_diagnostics.py" = ["I001"]
+"bridge/runtime_diagnostics.py" = ["I001"]
