@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $matches = Get-CimInstance Win32_Process | Where-Object {
     $_.Name -match '^python(w)?\.exe$' -and
