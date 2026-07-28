@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
-from bridge.simli_session import utc_iso
+from bridge.simli_session import classify_simli_failure, utc_iso
 
 VOICE_THRESHOLD_DBFS = -50.0
 
@@ -12,7 +13,6 @@ def install_link_runtime_timestamps(runtime_class: type) -> None:
         return
 
     original_enqueue = runtime_class._enqueue_audio
-    original_sender = runtime_class._sender_loop
 
     def patched_enqueue(runtime: Any, data: bytes) -> None:
         state = runtime.state
@@ -28,7 +28,7 @@ def install_link_runtime_timestamps(runtime_class: type) -> None:
         try:
             while not runtime.stop_flag.is_set():
                 try:
-                    data = await __import__("asyncio").wait_for(runtime.audio_queue.get(), timeout=0.5)
+                    data = await asyncio.wait_for(runtime.audio_queue.get(), timeout=0.5)
                 except TimeoutError:
                     if runtime.renderer and runtime.renderer.stop_event.is_set():
                         runtime.stop_flag.set()
@@ -40,16 +40,18 @@ def install_link_runtime_timestamps(runtime_class: type) -> None:
                     runtime.state["first_audio_sent_at"] = utc_iso()
                 runtime.state["sent_chunks"] += 1
                 runtime.state["sent_bytes"] += len(data)
-        except __import__("asyncio").CancelledError:
+        except asyncio.CancelledError:
             raise
-        except Exception:
-            # Preserve the mature failure-classification path in the original implementation.
-            # It is safe to delegate only before any successful sends; after a send, re-raise so
-            # the runtime guard can capture the exact transport failure rather than double-send.
-            if int(runtime.state.get("sent_chunks") or 0) == 0:
-                await original_sender(runtime)
-                return
-            raise
+        except Exception as exc:
+            detail = classify_simli_failure(
+                exc,
+                phase="streaming",
+                diagnostics=dict(runtime.state.get("diagnostics") or {}),
+            )
+            runtime.state.update(
+                {"status": "failed", "error": detail["message_zh"], "error_detail": detail}
+            )
+            runtime.stop_flag.set()
 
     original_start = runtime_class.start
 
