@@ -1,8 +1,7 @@
 name: Ruff Link Debug
 
 on:
-  push:
-    branches: [feat/simli-link-diagnostics]
+  pull_request:
 
 jobs:
   ruff:
