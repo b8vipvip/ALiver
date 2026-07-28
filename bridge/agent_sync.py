@@ -30,8 +30,15 @@ from bridge.simli_diagnostics import (
 )
 from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
 from bridge.simli_sync_compat import install_audio_iterator_compat
+from bridge.simli_tuning import (
+    install_simli_tuning_patch,
+    manager_apply_tuning,
+    manager_reset_tuning,
+    manager_run_tuning_test,
+    manager_tuning_status,
+)
 
-BRIDGE_VERSION = "0.5.2"
+BRIDGE_VERSION = "0.6.0"
 
 
 def _attach_recent_events(manager, session_id, report):
@@ -65,8 +72,9 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
 def install() -> None:
     install_audio_iterator_compat(SimliSynchronizedRenderer)
     install_simli_diagnostics_patch(SimliSynchronizedRenderer)
-    # Install last so it replaces the risky per-frame OpenCV diagnostic path.
     install_simli_crash_guard(SimliSynchronizedRenderer)
+    # Install after diagnostics/crash guard so the tuning clock owns the final playback path.
+    install_simli_tuning_patch(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
@@ -78,6 +86,8 @@ def install() -> None:
         for item in (
             "provider.simli.av_sync",
             "provider.simli.objective_diagnostics",
+            "provider.simli.tuning",
+            "provider.simli.tuning.test",
             "audio.live_out.auto",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
@@ -119,6 +129,32 @@ def install() -> None:
                     duration_seconds=float(payload.get("duration_seconds", 12)),
                 )
                 result = _attach_recent_events(self.simli, session_id, report)
+            elif command_type == "provider.simli.tuning.get":
+                result = manager_tuning_status(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                )
+            elif command_type == "provider.simli.tuning.apply":
+                result = manager_apply_tuning(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                    settings=dict(payload.get("settings") or {}),
+                    persist=bool(payload.get("persist", False)),
+                )
+            elif command_type == "provider.simli.tuning.reset":
+                result = manager_reset_tuning(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                    persist=bool(payload.get("persist", True)),
+                )
+            elif command_type == "provider.simli.tuning.test":
+                session_id = str(payload.get("session_id") or "") or None
+                result = await manager_run_tuning_test(
+                    self.simli,
+                    session_id=session_id,
+                    duration_seconds=float(payload.get("duration_seconds", 18)),
+                )
+                result = _attach_recent_events(self.simli, session_id, result)
             elif command_type == "bridge.diagnostics.paths":
                 result = current_paths()
             elif command_type == "bridge.diagnostics.bundle":
