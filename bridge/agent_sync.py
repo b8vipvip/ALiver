@@ -11,6 +11,7 @@ os.environ.setdefault("OPENCV_OPENCL_RUNTIME", "disabled")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from bridge import agent, simli_session
+from bridge.control_channel import install_bridge_control_guard
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -85,6 +86,7 @@ def install() -> None:
     install_simli_waveout_patch(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
+    install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
     original_execute = agent.BridgeAgent.execute
