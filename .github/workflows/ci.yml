@@ -28,5 +28,11 @@ jobs:
       - run: node --check app/static/simli_tuning.js
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
+      - name: Capture Ruff report
+        run: ruff check app bridge tests --output-format=json > ruff-${{ matrix.python-version }}.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ruff-${{ matrix.python-version }}
+          path: ruff-${{ matrix.python-version }}.json
       - run: ruff check app bridge tests
       - run: pytest
