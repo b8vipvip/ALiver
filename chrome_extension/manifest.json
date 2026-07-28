@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ALiver ChatGPT Controller",
-  "version": "0.1.1",
-  "description": "Receives ALiver director commands and sends them into the active ChatGPT conversation.",
+  "version": "0.1.2",
+  "description": "Receives ALiver director commands and sends them into the explicitly bound ChatGPT conversation.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "http://127.0.0.1/*",
