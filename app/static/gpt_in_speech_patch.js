@@ -59,9 +59,14 @@
       play_return_audio: true,
       auto_live_out: true,
       audio_output_device_name: '',
+      video_clock_mode: 'source_pts',
+      target_video_fps: 30,
+      video_playback_speed: 1,
       sync_prebuffer_ms: 350,
       video_delay_ms: 0,
-      late_video_drop_ms: 180,
+      late_video_drop_ms: 250,
+      audio_active_dbfs: -50,
+      mouth_sensitivity: 1,
     }, null, 2);
     toast('已填入 Simli 音画同步模板。安装 CABLE-B 后会自动作为 LIVE_OUT。');
   });
@@ -92,7 +97,7 @@
       </div>
     </div>
     <div id="simli-sync-status" class="diagnosis warn">尚未读取 Simli 同步状态。</div>
-    <p class="hint">检测期间让数字人连续说 8～12 秒。结果中正偏差表示口型晚于声音，负偏差表示口型早于声音。</p>
+    <p class="hint">更完整的标准朗读、实时参数和自动推荐已移到“数字人调试”页面。</p>
     <pre id="simli-sync-json">启动 Simli 会话后读取状态。</pre>
   `;
   sessionsTab.appendChild(panel);
@@ -195,8 +200,15 @@
 })();
 
 (() => {
-  const script = document.createElement('script');
-  script.src = '/static/diagnostics_zh.js?v=0.7.1';
-  script.defer = true;
-  document.head.appendChild(script);
+  for (const [src, id] of [
+    ['/static/diagnostics_zh.js?v=0.8.0', 'aliver-diagnostics-zh'],
+    ['/static/simli_tuning.js?v=0.8.0', 'aliver-simli-tuning'],
+  ]) {
+    if (document.getElementById(id)) continue;
+    const script = document.createElement('script');
+    script.id = id;
+    script.src = src;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
 })();
