@@ -44,3 +44,4 @@ ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "bridge/audio_capture.py" = ["F841"]
+"bridge/simli_sync.py" = ["B039"]
