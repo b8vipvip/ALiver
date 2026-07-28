@@ -24,9 +24,12 @@ def install_bridge_control_guard(agent_module: Any) -> None:
     async def safe_send(self, ws, payload: dict[str, Any]) -> bool:
         try:
             async with self._control_send_lock:
-                await ws.send(json.dumps(payload, ensure_ascii=False))
+                await asyncio.wait_for(
+                    ws.send(json.dumps(payload, ensure_ascii=False)),
+                    timeout=5.0,
+                )
             return True
-        except websockets.ConnectionClosed as exc:
+        except (websockets.ConnectionClosed, TimeoutError, OSError) as exc:
             event(
                 "bridge_control_send_dropped",
                 error=f"{type(exc).__name__}: {exc}",
@@ -36,7 +39,10 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             return False
 
     async def patched_heartbeat_loop(self, ws) -> None:
-        interval = max(3.0, float(self.config.get("heartbeat_seconds", 10)))
+        configured = float(self.config.get("heartbeat_seconds", 10))
+        # Reconciliation uses this heartbeat. Keep it frequent on the local control plane
+        # so a closed/failed avatar disappears from the server UI within a few seconds.
+        interval = min(3.0, max(1.0, configured))
         while True:
             sent = await self._control_safe_send(
                 ws,
