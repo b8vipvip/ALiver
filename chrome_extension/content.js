@@ -1,10 +1,75 @@
 (() => {
-  const CONTENT_VERSION = '0.1.1';
+  const CONTENT_VERSION = '0.1.3';
   const STATE_KEY = '__ALIVER_CHATGPT_CONTENT_CONTROLLER__';
   const previous = globalThis[STATE_KEY];
-  if (previous?.version === CONTENT_VERSION) return;
+
+  function safeRuntimeId() {
+    try {
+      return chrome?.runtime?.id || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function safeRemoveListener(listener) {
+    if (!listener) return;
+    try {
+      if (safeRuntimeId()) chrome.runtime.onMessage.removeListener(listener);
+    } catch (_) {}
+  }
+
+  if (previous?.version === CONTENT_VERSION && !previous?.stopped) return;
   if (previous?.intervalId) clearInterval(previous.intervalId);
-  if (previous?.listener) chrome.runtime.onMessage.removeListener(previous.listener);
+  if (previous?.startupTimerId) clearTimeout(previous.startupTimerId);
+  safeRemoveListener(previous?.listener);
+
+  const state = {
+    version: CONTENT_VERSION,
+    listener: null,
+    intervalId: null,
+    startupTimerId: null,
+    stopped: false,
+    stopReason: '',
+  };
+  globalThis[STATE_KEY] = state;
+
+  function stopController(reason = 'extension context invalidated') {
+    if (state.stopped) return;
+    state.stopped = true;
+    state.stopReason = reason;
+    if (state.intervalId) {
+      clearInterval(state.intervalId);
+      state.intervalId = null;
+    }
+    if (state.startupTimerId) {
+      clearTimeout(state.startupTimerId);
+      state.startupTimerId = null;
+    }
+    safeRemoveListener(state.listener);
+  }
+
+  function extensionContextAvailable() {
+    const available = Boolean(safeRuntimeId());
+    if (!available) stopController();
+    return available;
+  }
+
+  function isContextInvalidatedError(error) {
+    return /Extension context invalidated|context invalidated/i.test(String(error?.message || error || ''));
+  }
+
+  async function safeRuntimeSendMessage(message) {
+    if (!extensionContextAvailable()) return null;
+    try {
+      return await chrome.runtime.sendMessage(message);
+    } catch (error) {
+      if (isContextInvalidatedError(error) || !safeRuntimeId()) {
+        stopController(String(error?.message || error || 'extension context invalidated'));
+        return null;
+      }
+      throw error;
+    }
+  }
 
   const COMMAND_SELECTOR = '#prompt-textarea, textarea[placeholder], div[contenteditable="true"]';
 
@@ -166,19 +231,40 @@
     }
     return false;
   };
+  state.listener = listener;
 
-  chrome.runtime.onMessage.addListener(listener);
+  if (!extensionContextAvailable()) return;
+  try {
+    chrome.runtime.onMessage.addListener(listener);
+  } catch (error) {
+    stopController(String(error?.message || error));
+    return;
+  }
 
   let lastStatus = '';
-  const reportStatus = () => {
+  const reportStatus = async () => {
+    if (state.stopped || !extensionContextAvailable()) return;
     const data = pageStatus();
     const serialized = JSON.stringify(data);
-    if (serialized !== lastStatus) {
-      lastStatus = serialized;
-      chrome.runtime.sendMessage({ type: 'aliver.page.status.changed', data }).catch(() => {});
+    if (serialized === lastStatus) return;
+    lastStatus = serialized;
+    try {
+      await safeRuntimeSendMessage({ type: 'aliver.page.status.changed', data });
+    } catch (error) {
+      // A live extension context may still reject a transient message if the
+      // service worker is restarting. That is harmless; the next interval retries.
+      if (isContextInvalidatedError(error)) stopController(String(error.message || error));
     }
   };
-  const intervalId = setInterval(reportStatus, 5000);
-  globalThis[STATE_KEY] = { version: CONTENT_VERSION, listener, intervalId };
-  setTimeout(reportStatus, 250);
+
+  state.intervalId = setInterval(() => {
+    reportStatus().catch(error => {
+      if (isContextInvalidatedError(error)) stopController(String(error.message || error));
+    });
+  }, 5000);
+  state.startupTimerId = setTimeout(() => {
+    reportStatus().catch(error => {
+      if (isContextInvalidatedError(error)) stopController(String(error.message || error));
+    });
+  }, 250);
 })();
