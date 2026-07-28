@@ -54,7 +54,10 @@ def install_provider_patch() -> None:
 
 install_provider_patch()
 app.__version__ = SERVER_VERSION
-from app.main import app as application, settings  # noqa: E402
+from app import main as app_main  # noqa: E402
+
+application = app_main.app
+settings = app_main.settings
 
 
 if __name__ == "__main__":
