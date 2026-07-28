@@ -138,3 +138,18 @@ def test_tuning_normalization_and_recommendation():
     assert normalized["clock_mode"] == "source_pts"
     assert normalized["target_fps"] == 60
     assert normalized["playback_speed"] == 0.5
+    assert normalized["video_delay_ms"] == 5000
+
+    recommendation = build_tuning_recommendation(
+        {
+            "wall_lip_sync_offset_ms": -2200.0,
+            "wall_correlation_confidence": "high",
+            "wall_video_speed_ratio": 1.0,
+            "source_pts_fps": 24.0,
+            "scheduler_lateness_ms": 120.0,
+        },
+        normalize_tuning(),
+    )
+    assert recommendation["settings"]["video_delay_ms"] == 2200
+    assert recommendation["settings"]["clock_mode"] == "source_pts"
+    assert recommendation["auto_apply_allowed"] is True
