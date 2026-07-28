@@ -9,7 +9,7 @@
 <body>
   <main>
     <h1>ALiver Controller</h1>
-    <p class="hint">把服务端导演指令发送到当前 ChatGPT 对话。</p>
+    <p class="hint">把服务端导演指令固定发送到你绑定的 ChatGPT 对话。</p>
     <label>服务端地址<input id="server-url" value="http://127.0.0.1:8765"></label>
     <label>扩展名称<input id="extension-name" value="ALiver ChatGPT Controller"></label>
     <label>ALiver 管理令牌<input id="admin-token" type="password" placeholder="X-ALiver-Token"></label>
@@ -18,6 +18,14 @@
       <button id="reconnect" class="secondary">重新连接</button>
     </div>
     <section id="status">正在读取状态…</section>
+    <section id="binding-card">
+      <strong>导演目标会话</strong>
+      <div id="binding-status">正在读取绑定状态…</div>
+      <div class="actions">
+        <button id="bind-current">绑定当前 ChatGPT 会话</button>
+        <button id="unbind" class="secondary">解除绑定</button>
+      </div>
+    </section>
     <button id="open-dashboard" class="link">打开 ALiver 控制台</button>
   </main>
   <script src="popup.js"></script>
