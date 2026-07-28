@@ -7,7 +7,7 @@ import uvicorn
 import app
 from app.providers import simli as simli_provider
 
-SERVER_VERSION = "0.7.1"
+SERVER_VERSION = "0.7.2"
 
 
 def _clamp_int(value: Any, minimum: int, maximum: int, default: int) -> int:
@@ -44,6 +44,9 @@ def install_provider_patch() -> None:
                     values.get("late_video_drop_ms"), 50, 1000, 180
                 ),
                 "sync_debug": bool(values.get("sync_debug", False)),
+                "objective_diagnostics_enabled": bool(
+                    values.get("objective_diagnostics_enabled", True)
+                ),
             }
         )
         return config
