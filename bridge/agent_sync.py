@@ -4,6 +4,7 @@ import asyncio
 
 from bridge import agent, simli_session
 from bridge.simli_diagnostics import (
+    find_runtime,
     install_simli_diagnostics_patch,
     manager_diagnostic_report,
     run_manager_diagnostic,
@@ -12,6 +13,14 @@ from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patc
 from bridge.simli_sync_compat import install_audio_iterator_compat
 
 BRIDGE_VERSION = "0.5.1"
+
+
+def _attach_recent_events(manager, session_id, report):
+    runtime = find_runtime(manager, session_id)
+    renderer = getattr(runtime, "renderer", None)
+    report = dict(report)
+    report["recent_events"] = list(getattr(renderer, "_diag_events", []))[-30:]
+    return report
 
 
 def install() -> None:
@@ -44,16 +53,17 @@ def install() -> None:
         if command_type == "provider.simli.status":
             return self.simli.status()
         if command_type == "provider.simli.diagnostics.report":
-            return manager_diagnostic_report(
-                self.simli,
-                session_id=str(payload.get("session_id") or "") or None,
-            )
+            session_id = str(payload.get("session_id") or "") or None
+            report = manager_diagnostic_report(self.simli, session_id=session_id)
+            return _attach_recent_events(self.simli, session_id, report)
         if command_type == "provider.simli.diagnostics.run":
-            return await run_manager_diagnostic(
+            session_id = str(payload.get("session_id") or "") or None
+            report = await run_manager_diagnostic(
                 self.simli,
-                session_id=str(payload.get("session_id") or "") or None,
+                session_id=session_id,
                 duration_seconds=float(payload.get("duration_seconds", 12)),
             )
+            return _attach_recent_events(self.simli, session_id, report)
         return await original_execute(self, command_type, payload)
 
     agent.BridgeAgent.capabilities = staticmethod(capabilities)
