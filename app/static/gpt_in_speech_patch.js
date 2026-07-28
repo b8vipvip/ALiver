@@ -75,18 +75,24 @@
 (() => {
   const sessionsTab = document.getElementById('tab-sessions');
   if (!sessionsTab || document.getElementById('simli-sync-panel')) return;
+  let currentSessionId = '';
+
   const panel = document.createElement('article');
   panel.id = 'simli-sync-panel';
   panel.className = 'panel';
   panel.innerHTML = `
     <div class="section-title">
       <div>
-        <h2>Simli 音画同步 / LIVE_OUT</h2>
-        <p class="hint">音频作为主时钟，视频按音频播放进度显示；优先自动输出到 CABLE-B Input。</p>
+        <h2>Simli 客观音画诊断 / LIVE_OUT</h2>
+        <p class="hint">不再依赖主观观察：记录真实播放事件，分析声音起点、口部运动、相关性偏差、PTS 帧率和视频速度。</p>
       </div>
-      <button id="simli-sync-refresh" type="button" class="secondary">读取状态</button>
+      <div class="actions">
+        <button id="simli-sync-refresh" type="button" class="secondary">读取状态</button>
+        <button id="simli-sync-run" type="button">开始 12 秒自动检测</button>
+      </div>
     </div>
     <div id="simli-sync-status" class="diagnosis warn">尚未读取 Simli 同步状态。</div>
+    <p class="hint">检测期间让数字人连续说 8～12 秒。结果中正偏差表示口型晚于声音，负偏差表示口型早于声音。</p>
     <pre id="simli-sync-json">启动 Simli 会话后读取状态。</pre>
   `;
   sessionsTab.appendChild(panel);
@@ -97,12 +103,35 @@
     return (state.bridges || []).find(bridge => bridge.connected)?.id || '';
   }
 
+  function metric(value, digits = 1, suffix = '') {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '未测得';
+    return `${Number(value).toFixed(digits)}${suffix}`;
+  }
+
+  function renderReport(report, sync = {}) {
+    const status = document.getElementById('simli-sync-status');
+    const health = sync.sync_health || (report.problems?.length ? 'bad' : 'measuring');
+    const lines = [
+      report.conclusion_zh || '正在收集客观数据。',
+      `首次声音→口型：${metric(report.first_onset_offset_ms, 1, ' ms')}`,
+      `持续相关性偏差：${metric(report.estimated_lip_sync_offset_ms, 1, ' ms')}`,
+      `相关性置信度：${report.correlation_confidence || '未测得'}`,
+      `视频速度：${metric(report.video_playback_speed_ratio, 3, '×')}`,
+      `PTS/接收/渲染：${metric(report.source_pts_fps, 1)} / ${metric(report.receive_fps, 1)} / ${metric(report.render_fps_recent, 1)} FPS`,
+      `时钟：${report.clock_mode || sync.video_clock_mode || '未知'}`,
+      `LIVE_OUT：${sync.audio_output_device || '未播放'}`,
+    ];
+    status.textContent = lines.join(' · ');
+    status.className = `diagnosis ${health === 'good' ? 'good' : health === 'bad' ? 'bad' : 'warn'}`;
+  }
+
   function renderSync(value) {
     const sessions = Object.values(value || {});
     const current = sessions.find(row => ['active', 'starting'].includes(row?.status)) || sessions[0];
     const sync = current?.av_sync;
     const status = document.getElementById('simli-sync-status');
     const output = document.getElementById('simli-sync-json');
+    currentSessionId = current?.session_id || '';
     output.textContent = JSON.stringify(value || {}, null, 2);
     if (!current) {
       status.textContent = '当前 Bridge 没有 Simli 会话。';
@@ -114,15 +143,7 @@
       status.className = 'diagnosis warn';
       return;
     }
-    const health = sync.sync_health || sync.status;
-    status.textContent = [
-      `同步：${health}`,
-      `偏差：${Number(sync.av_offset_ms || 0).toFixed(1)} ms`,
-      `帧率：${Number(sync.render_fps || 0).toFixed(1)} FPS`,
-      `LIVE_OUT：${sync.audio_output_device || '未播放'}`,
-      sync.warning || '',
-    ].filter(Boolean).join(' · ');
-    status.className = `diagnosis ${health === 'good' ? 'good' : health === 'bad' ? 'bad' : 'warn'}`;
+    renderReport(sync.objective_diagnostics || {}, sync);
   }
 
   async function refresh() {
@@ -130,10 +151,42 @@
     if (!bridgeId) throw new Error('没有在线 Bridge');
     const data = await sendBridgeCommand(bridgeId, 'provider.simli.status', {}, 12);
     renderSync(data);
+    return data;
+  }
+
+  async function runDiagnostic() {
+    const bridgeId = onlineBridgeId();
+    if (!bridgeId) throw new Error('没有在线 Bridge');
+    if (!currentSessionId) await refresh();
+    if (!currentSessionId) throw new Error('当前没有运行中的 Simli 会话');
+    const button = document.getElementById('simli-sync-run');
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = '检测中 12 秒…';
+    toast('检测已开始。现在让数字人连续说 8～12 秒。');
+    try {
+      const report = await sendBridgeCommand(
+        bridgeId,
+        'provider.simli.diagnostics.run',
+        { session_id: currentSessionId, duration_seconds: 12 },
+        25,
+      );
+      const statusData = await sendBridgeCommand(bridgeId, 'provider.simli.status', {}, 12);
+      const current = Object.values(statusData || {}).find(row => row?.session_id === currentSessionId);
+      renderReport(report, current?.av_sync || {});
+      document.getElementById('simli-sync-json').textContent = JSON.stringify(report, null, 2);
+      toast(report.conclusion_zh || '客观同步检测完成');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
   }
 
   document.getElementById('simli-sync-refresh').addEventListener('click', () => {
     refresh().catch(error => toast(error.message, true));
+  });
+  document.getElementById('simli-sync-run').addEventListener('click', () => {
+    runDiagnostic().catch(error => toast(error.message, true));
   });
 
   setInterval(() => {
@@ -143,7 +196,7 @@
 
 (() => {
   const script = document.createElement('script');
-  script.src = '/static/diagnostics_zh.js?v=0.7.0';
+  script.src = '/static/diagnostics_zh.js?v=0.7.1';
   script.defer = true;
   document.head.appendChild(script);
 })();

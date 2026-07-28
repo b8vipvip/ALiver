@@ -3,6 +3,12 @@ from fractions import Fraction
 from app.bootstrap import SERVER_VERSION
 from app.providers.base import ProviderContext
 from app.providers.simli import SimliProvider
+from bridge.simli_diagnostics import (
+    build_diagnostic_conclusion,
+    estimate_signal_lag,
+    median_fps,
+    timeline_speed_ratio,
+)
 from bridge.simli_sync import clamp, frame_time_seconds, interleaved_pcm16
 
 
@@ -65,9 +71,49 @@ def test_provider_patch_forwards_sync_and_live_out_settings():
 
     config = provider._runtime_config()
 
-    assert SERVER_VERSION == "0.7.0"
+    assert SERVER_VERSION == "0.7.1"
     assert config["audio_output_device_name"] == "CABLE-B Input (VB-Audio Cable B)"
     assert config["auto_live_out"] is True
     assert config["sync_prebuffer_ms"] == 420
     assert config["video_delay_ms"] == 75
     assert config["late_video_drop_ms"] == 210
+
+
+def test_objective_lag_estimator_reports_video_delay():
+    spans = [(1.0, 1.3), (2.4, 2.9), (4.1, 4.7), (6.6, 7.2), (9.0, 10.0)]
+
+    def envelope(at: float) -> float:
+        return 1.0 if any(start <= at <= end for start, end in spans) else 0.05
+
+    audio = []
+    video = []
+    for index in range(260):
+        at = index * 0.05
+        audio.append((at, envelope(at)))
+        video.append((at, envelope(at - 0.4)))
+
+    result = estimate_signal_lag(audio, video)
+
+    assert result["lag_ms"] == 400.0
+    assert result["confidence"] == "high"
+    assert result["correlation"] > 0.9
+
+
+def test_slow_motion_and_pts_metrics_are_objective():
+    assert median_fps([1 / 15] * 20) == 15.0
+    assert median_fps([1 / 30] * 20) == 30.0
+    assert timeline_speed_ratio([(0.0, 0.0), (10.0, 5.0)]) == 0.5
+
+    conclusion, problems, suggestions = build_diagnostic_conclusion(
+        {
+            "first_onset_offset_ms": 1400.0,
+            "estimated_lip_sync_offset_ms": 1250.0,
+            "correlation_confidence": "high",
+            "video_playback_speed_ratio": 0.5,
+            "source_pts_fps": 15.0,
+        }
+    )
+
+    assert "口型比声音晚" in conclusion
+    assert any("慢放" in problem for problem in problems)
+    assert suggestions
