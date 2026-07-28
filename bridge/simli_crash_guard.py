@@ -4,7 +4,7 @@ import asyncio
 import time
 from typing import Any
 
-from bridge.runtime_diagnostics import event, exception
+from bridge.runtime_diagnostics import create_support_bundle, event, exception, local_iso
 from bridge.simli_sync import DEFAULT_VIDEO_FPS
 
 
@@ -65,6 +65,7 @@ def install_simli_crash_guard(renderer_class: type) -> None:
             output_device=self._metrics.get("audio_output_device"),
             output_device_index=self._metrics.get("audio_output_device_index"),
             output_latency_ms=self._metrics.get("audio_output_latency_ms"),
+            output_backend=self._metrics.get("audio_output_backend"),
         )
 
     def safe_mouth_motion(self, image: Any) -> tuple[float, float]:
@@ -134,7 +135,6 @@ def install_simli_crash_guard(renderer_class: type) -> None:
                     contiguous=bool(getattr(getattr(image, "flags", None), "c_contiguous", False)),
                 )
 
-            # NumPy channel reversal avoids an additional cv2.cvtColor native call before imshow.
             if trace_frame:
                 event("simli_frame_bgr_copy_enter", frame_number=frame_number)
             bgr = image[..., ::-1].copy()
@@ -205,11 +205,12 @@ def install_simli_crash_guard(renderer_class: type) -> None:
 
 
 def install_simli_runtime_guard(runtime_class: type) -> None:
-    if getattr(runtime_class, "_aliver_runtime_guard_v1", False):
+    if getattr(runtime_class, "_aliver_runtime_guard_v2", False):
         return
     original_set_phase = runtime_class._set_phase
     original_start = runtime_class.start
     original_stop = runtime_class.stop
+    original_status = runtime_class.status
 
     def patched_set_phase(self, phase: str) -> None:
         event(
@@ -220,7 +221,62 @@ def install_simli_runtime_guard(runtime_class: type) -> None:
         )
         original_set_phase(self, phase)
 
+    def schedule_bundle(self, reason: str) -> None:
+        if getattr(self, "_aliver_failure_bundle_scheduled", False):
+            return
+        self._aliver_failure_bundle_scheduled = True
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                asyncio.to_thread(create_support_bundle, reason=reason, minutes=45),
+                name=f"simli-failure-bundle-{self.session_id}",
+            )
+        except RuntimeError:
+            pass
+
+    def mark_task_failure(self, task_name: str, error: BaseException | None) -> None:
+        if getattr(self, "_aliver_stop_requested", False):
+            return
+        if str(self.state.get("status") or "") not in {"starting", "active"}:
+            return
+        task_zh = "数字人音视频渲染任务" if task_name == "renderer_task" else "GPT_OUT 音频发送任务"
+        original_error = f"{type(error).__name__}: {error}" if error is not None else "任务提前结束"
+        message = f"{task_zh}已意外停止，数字人会话已失效。"
+        detail = {
+            "code": "SIMLI_BACKGROUND_TASK_STOPPED",
+            "message_zh": message,
+            "phase": "streaming",
+            "phase_zh": "实时音视频传输",
+            "task": task_name,
+            "original_error": original_error,
+            "suggestions": [
+                "停止当前会话后重新启动，不要继续使用页面中残留的活动会话。",
+                "把自动生成的最新 Bridge 故障包发送给开发者。",
+            ],
+            "occurred_at": local_iso(),
+        }
+        self.state.update(
+            {
+                "status": "failed",
+                "error": message,
+                "error_detail": detail,
+                "stopped_at": local_iso(),
+            }
+        )
+        self.stop_flag.set()
+        if self.renderer is not None:
+            self.renderer.stop_event.set()
+        event(
+            "simli_runtime_marked_failed",
+            session_id=self.session_id,
+            task=task_name,
+            detail=detail,
+        )
+        schedule_bundle(self, f"Simli {task_zh}意外停止")
+
     async def patched_start(self):
+        self._aliver_stop_requested = False
+        self._aliver_failure_bundle_scheduled = False
         event("simli_runtime_start_enter", session_id=self.session_id)
         try:
             result = await original_start(self)
@@ -239,20 +295,37 @@ def install_simli_runtime_guard(runtime_class: type) -> None:
             if task is None:
                 continue
 
-            def done_callback(done_task, *, name=task_name, session_id=self.session_id):
+            def done_callback(done_task, *, name=task_name, runtime=self):
                 if done_task.cancelled():
-                    event("simli_background_task_cancelled", session_id=session_id, task=name)
+                    event("simli_background_task_cancelled", session_id=runtime.session_id, task=name)
+                    mark_task_failure(runtime, name, asyncio.CancelledError())
                     return
                 error = done_task.exception()
                 if error is None:
-                    event("simli_background_task_completed", session_id=session_id, task=name)
+                    event("simli_background_task_completed", session_id=runtime.session_id, task=name)
                 else:
-                    exception("simli_background_task_failed", error, session_id=session_id, task=name)
+                    exception("simli_background_task_failed", error, session_id=runtime.session_id, task=name)
+                mark_task_failure(runtime, name, error)
 
             task.add_done_callback(done_callback)
         return result
 
+    def patched_status(self):
+        result = original_status(self)
+        result["renderer_task_done"] = bool(self.renderer_task and self.renderer_task.done())
+        result["sender_task_done"] = bool(self.sender_task and self.sender_task.done())
+        result["capture_thread_alive"] = bool(self.capture_thread and self.capture_thread.is_alive())
+        renderer = getattr(self, "renderer", None)
+        if renderer is not None:
+            try:
+                renderer_status = renderer.status()
+            except Exception as exc:
+                renderer_status = {"status_error": f"{type(exc).__name__}: {exc}"}
+            result["renderer"] = renderer_status
+        return result
+
     async def patched_stop(self):
+        self._aliver_stop_requested = True
         event("simli_runtime_stop_enter", session_id=self.session_id, state=self.state)
         try:
             return await original_stop(self)
@@ -261,5 +334,7 @@ def install_simli_runtime_guard(runtime_class: type) -> None:
 
     runtime_class._set_phase = patched_set_phase
     runtime_class.start = patched_start
+    runtime_class.status = patched_status
     runtime_class.stop = patched_stop
     runtime_class._aliver_runtime_guard_v1 = True
+    runtime_class._aliver_runtime_guard_v2 = True

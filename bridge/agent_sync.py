@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 # Disable OpenCV acceleration paths that have caused native crashes on some Windows drivers.
@@ -38,8 +39,11 @@ from bridge.simli_tuning import (
     manager_tuning_status,
 )
 from bridge.simli_waveout import install_simli_waveout_patch
+from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.6.1"
+BRIDGE_VERSION = "0.6.2"
+BASE_DIR = Path(__file__).resolve().parent
+INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
 
 def _attach_recent_events(manager, session_id, report):
@@ -64,6 +68,7 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
                 "last_input_dbfs": runtime.state.get("last_input_dbfs"),
                 "renderer_task_done": bool(runtime.renderer_task and runtime.renderer_task.done()),
                 "sender_task_done": bool(runtime.sender_task and runtime.sender_task.done()),
+                "capture_thread_alive": bool(runtime.capture_thread and runtime.capture_thread.is_alive()),
             }
             for session_id, runtime in sessions.items()
         },
@@ -93,6 +98,7 @@ def install() -> None:
             "provider.simli.tuning.test",
             "audio.live_out.auto",
             "audio.live_out.waveout",
+            "bridge.single_instance",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
         ):
@@ -189,32 +195,47 @@ def install() -> None:
 
 
 async def main() -> None:
-    start_runtime_logging(component="bridge", version=BRIDGE_VERSION)
-    install()
-    loop = asyncio.get_running_loop()
-    install_asyncio_exception_handler(loop)
-    instance = agent.BridgeAgent()
-    heartbeat = asyncio.create_task(
-        heartbeat_loop(lambda: _session_summary(instance), interval_seconds=2.0),
-        name="bridge-runtime-heartbeat",
-    )
-    event("bridge_agent_main_enter", server_url=instance.server_url)
-    try:
-        await instance.run()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        exception("bridge_agent_main_failed", exc)
-        raise
-    finally:
-        heartbeat.cancel()
-        await asyncio.gather(heartbeat, return_exceptions=True)
+    instance_lock, owner = try_acquire_bridge_lock(INSTANCE_LOCK_PATH)
+    if instance_lock is None:
+        owner_pid = owner.get("pid") or "未知"
+        owner_started = owner.get("started_at") or "未知"
+        print(
+            "检测到另一个 ALiver Bridge 已经在运行，当前进程不会重复启动。"
+            f" 已有进程 PID={owner_pid}，启动时间={owner_started}。"
+        )
+        print(
+            "请先关闭旧 Bridge 窗口；找不到窗口时可运行 "
+            r".\scripts\stop_bridge_windows.ps1"
+        )
+        return
+
+    with instance_lock:
+        start_runtime_logging(component="bridge", version=BRIDGE_VERSION)
+        install()
+        loop = asyncio.get_running_loop()
+        install_asyncio_exception_handler(loop)
+        instance = agent.BridgeAgent()
+        heartbeat = asyncio.create_task(
+            heartbeat_loop(lambda: _session_summary(instance), interval_seconds=2.0),
+            name="bridge-runtime-heartbeat",
+        )
+        event("bridge_agent_main_enter", server_url=instance.server_url, instance_owner=owner)
         try:
-            await instance.simli.stop_all()
+            await instance.run()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            exception("bridge_agent_main_failed", exc)
+            raise
         finally:
-            await asyncio.to_thread(instance.audio.shutdown)
-        event("bridge_agent_main_exit")
-        mark_graceful_exit()
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
+            try:
+                await instance.simli.stop_all()
+            finally:
+                await asyncio.to_thread(instance.audio.shutdown)
+            event("bridge_agent_main_exit")
+            mark_graceful_exit()
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ from app.json_utils import dumps, loads
 from app.log_service import write_log
 from app.models import BridgeAgent, BrowserExtension, DirectorCommand, ProviderConfig
 from app.security import encrypt_json, verify_token
+from app.session_reconciliation import reconcile_bridge_sessions
 
 settings = get_settings()
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -89,12 +90,15 @@ async def bridge_websocket(
     bridge_id: str,
     token: str = Query(...),
 ) -> None:
+    connection_id: str | None = None
+    disconnect_code: int | None = None
+    disconnect_reason: str | None = None
     with SessionLocal() as db:
         row = db.get(BridgeAgent, bridge_id)
         if not row or not verify_token(token, row.token_hash):
             await websocket.close(code=4401)
             return
-        await bridge_hub.connect(bridge_id, websocket)
+        connection_id = await bridge_hub.connect(bridge_id, websocket)
         row.status = "online"
         row.last_seen_at = datetime.now(timezone.utc)
         db.commit()
@@ -103,39 +107,72 @@ async def bridge_websocket(
             category="bridge.connected",
             message=f"Bridge connected: {row.name}",
             bridge_id=row.id,
+            details={"connection_id": connection_id},
         )
     try:
-        await websocket.send_json({"type": "welcome", "bridge_id": bridge_id})
+        await websocket.send_json(
+            {"type": "welcome", "bridge_id": bridge_id, "connection_id": connection_id}
+        )
         while True:
             message = await websocket.receive_json()
-            await bridge_hub.handle_message(bridge_id, message)
+            await bridge_hub.handle_message(
+                bridge_id,
+                message,
+                connection_id=connection_id,
+            )
             if message.get("type") == "heartbeat":
+                metadata = message.get("metadata")
                 with SessionLocal() as db:
                     row = db.get(BridgeAgent, bridge_id)
                     if row:
                         row.status = "online"
                         row.last_seen_at = datetime.now(timezone.utc)
-                        if isinstance(message.get("metadata"), dict):
-                            row.metadata_json = dumps(message["metadata"])
+                        if isinstance(metadata, dict):
+                            row.metadata_json = dumps(metadata)
                         db.commit()
-                await websocket.send_json({"type": "pong"})
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        logger.exception("Bridge WebSocket failed: %s", bridge_id)
-    finally:
-        await bridge_hub.disconnect(bridge_id)
-        with SessionLocal() as db:
-            row = db.get(BridgeAgent, bridge_id)
-            if row:
-                row.status = "offline"
-                db.commit()
-                write_log(
-                    db,
-                    category="bridge.disconnected",
-                    message=f"Bridge disconnected: {row.name}",
-                    bridge_id=row.id,
+                        changes = reconcile_bridge_sessions(db, bridge_id, metadata)
+                        for change in changes:
+                            write_log(
+                                db,
+                                category="session.reconciled",
+                                level="ERROR",
+                                message="检测到服务端会话与 Bridge 本地运行状态不一致，已标记为中断",
+                                bridge_id=bridge_id,
+                                session_id=change["session_id"],
+                                details=change,
+                            )
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                        "connection_id": connection_id,
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    }
                 )
+    except WebSocketDisconnect as exc:
+        disconnect_code = exc.code
+        disconnect_reason = getattr(exc, "reason", None)
+    except Exception as exc:
+        disconnect_reason = f"{type(exc).__name__}: {exc}"
+        logger.exception("Bridge WebSocket failed: %s / %s", bridge_id, connection_id)
+    finally:
+        removed_current = await bridge_hub.disconnect(bridge_id, connection_id)
+        if removed_current:
+            with SessionLocal() as db:
+                row = db.get(BridgeAgent, bridge_id)
+                if row:
+                    row.status = "offline"
+                    db.commit()
+                    write_log(
+                        db,
+                        category="bridge.disconnected",
+                        message=f"Bridge disconnected: {row.name}",
+                        bridge_id=row.id,
+                        details={
+                            "connection_id": connection_id,
+                            "code": disconnect_code,
+                            "reason": disconnect_reason,
+                        },
+                    )
 
 
 @app.websocket("/ws/extensions/{extension_id}")

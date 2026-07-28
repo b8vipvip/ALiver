@@ -8,6 +8,20 @@ if (-not (Test-Path $pythonExe)) {
     throw ".venv was not found. Run .\scripts\setup_windows.ps1 first."
 }
 
+$existing = Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -match '^python(w)?\.exe$' -and
+    $_.CommandLine -and
+    ($_.CommandLine -match 'bridge\.agent_sync' -or $_.CommandLine -match 'bridge[\\/]agent_sync\.py')
+}
+if ($existing) {
+    Write-Host "检测到已有 ALiver Bridge 进程，禁止重复启动：" -ForegroundColor Yellow
+    $existing | ForEach-Object {
+        Write-Host "  PID=$($_.ProcessId)  $($_.CommandLine)" -ForegroundColor Yellow
+    }
+    Write-Host "请先关闭旧 Bridge 窗口，或运行：.\scripts\stop_bridge_windows.ps1" -ForegroundColor Yellow
+    exit 0
+}
+
 $logDir = Join-Path $projectRoot "bridge\logs\console"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
