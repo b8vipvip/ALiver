@@ -5,4 +5,4 @@ if (-not (Test-Path $pythonExe)) {
     throw ".venv was not found. Run .\scripts\setup_windows.ps1 first."
 }
 
-& $pythonExe -m app.main
+& $pythonExe -m app.bootstrap
