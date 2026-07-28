@@ -11,6 +11,7 @@ os.environ.setdefault("OPENCV_OPENCL_RUNTIME", "disabled")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from bridge import agent, simli_session
+from bridge.control_channel import install_bridge_control_guard
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -22,6 +23,7 @@ from bridge.runtime_diagnostics import (
     redact,
     start_runtime_logging,
 )
+from bridge.simli_control_stability import fast_manager_tuning_status
 from bridge.simli_crash_guard import install_simli_crash_guard, install_simli_runtime_guard
 from bridge.simli_diagnostics import (
     find_runtime,
@@ -36,12 +38,11 @@ from bridge.simli_tuning import (
     manager_apply_tuning,
     manager_reset_tuning,
     manager_run_tuning_test,
-    manager_tuning_status,
 )
 from bridge.simli_waveout import install_simli_waveout_patch
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.6.2"
+BRIDGE_VERSION = "0.6.3"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -85,6 +86,7 @@ def install() -> None:
     install_simli_waveout_patch(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
+    install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
     original_execute = agent.BridgeAgent.execute
@@ -96,9 +98,11 @@ def install() -> None:
             "provider.simli.objective_diagnostics",
             "provider.simli.tuning",
             "provider.simli.tuning.test",
+            "provider.simli.tuning.lightweight_status",
             "audio.live_out.auto",
             "audio.live_out.waveout",
             "bridge.single_instance",
+            "bridge.control.serialized_send",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
         ):
@@ -140,7 +144,7 @@ def install() -> None:
                 )
                 result = _attach_recent_events(self.simli, session_id, report)
             elif command_type == "provider.simli.tuning.get":
-                result = manager_tuning_status(
+                result = fast_manager_tuning_status(
                     self.simli,
                     session_id=str(payload.get("session_id") or "") or None,
                 )

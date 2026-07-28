@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $pythonExe = ".\.venv\Scripts\python.exe"
 if (-not (Test-Path $pythonExe)) {
