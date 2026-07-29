@@ -9,6 +9,8 @@ class FakeClient:
         self.closed = False
         self.force_authorize = False
         self.triggered = []
+        self.injected = []
+        self.activated_expressions = []
 
     async def connect(self, *, force_authorize=False):
         self.force_authorize = force_authorize
@@ -16,6 +18,49 @@ class FakeClient:
 
     async def snapshot(self):
         return self._snapshot()
+
+    async def inspect_capabilities(self):
+        return {
+            "model_loaded": True,
+            "model_name": "Test Model",
+            "model_id": "model-1",
+            "input_parameters": [
+                {
+                    "name": "FaceAngleX",
+                    "value": 0,
+                    "min": -30,
+                    "max": 30,
+                    "defaultValue": 0,
+                }
+            ],
+            "live2d_parameters": [],
+            "expressions": [],
+            "role_map": {"angle_x": "FaceAngleX"},
+            "counts": {
+                "input_parameters": 1,
+                "live2d_parameters": 0,
+                "expressions": 0,
+                "resolved_motion_roles": 1,
+            },
+            "supported_actions": ["idle", "talking", "wave", "happy", "reset"],
+            "recommended_motion_engine": {
+                "enabled": True,
+                "preset": "gentle",
+                "fps": 15,
+                "expression_map": {},
+            },
+        }
+
+    async def parameter_value(self, _name):
+        return 0.0
+
+    async def inject_parameters(self, values):
+        self.injected.append(dict(values))
+        return {"injected": len(values)}
+
+    async def activate_expression(self, file_name, *, active, fade_time=0.25):
+        self.activated_expressions.append((file_name, active, fade_time))
+        return {"expression_file": file_name, "active": active}
 
     async def trigger_hotkey(self, identifier):
         self.triggered.append(identifier)
@@ -87,12 +132,14 @@ def test_vtube_manager_starts_loads_model_triggers_action_and_stops(monkeypatch)
         assert started["status"] == "active"
         assert started["model"]["name"] == "Test Model"
         assert started["config"]["hotkeys"]["wave"] == "Wave"
+        assert started["motion_capabilities"]["role_map"]["angle_x"] == "FaceAngleX"
 
         status = manager.status("session-vts")
         assert status["api"]["framerate"] == 60
 
         action = await manager.action("session-vts", action="wave")
         assert action["action_result"]["hotkey_name"] == "Wave"
+        assert action["action_result"]["procedural"]["action"] == "wave"
         assert action["last_action"] == "wave"
 
         authorized = await manager.authorize("session-vts")

@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.providers.base import AvatarProvider, ProviderResult
+from app.vtube_motion_config import normalize_motion_engine
 
 DEFAULT_WS_URL = "ws://127.0.0.1:8001"
 DEFAULT_HOTKEYS = {
@@ -83,6 +84,7 @@ class VTubeStudioProvider(AvatarProvider):
             "mouth_input_parameter": str(values.get("mouth_input_parameter") or "VoiceVolume")[:120],
             "mouth_output_parameter": str(values.get("mouth_output_parameter") or "ParamMouthOpenY")[:120],
             "hotkeys": _normalize_hotkeys(values.get("hotkeys")),
+            "motion_engine": normalize_motion_engine(values.get("motion_engine")),
         }
 
     async def test_connection(self) -> ProviderResult:
@@ -104,6 +106,7 @@ class VTubeStudioProvider(AvatarProvider):
                 "plugin_name": config["plugin_name"],
                 "require_model_loaded": config["require_model_loaded"],
                 "authorization_timeout_seconds": config["authorization_timeout_seconds"],
+                "motion_engine_enabled": config["motion_engine"]["enabled"],
             },
         )
 
