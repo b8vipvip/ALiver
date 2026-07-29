@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 MIN_AUTHORIZATION_TIMEOUT_SECONDS = 120.0
@@ -40,7 +41,7 @@ def install_vtube_studio_auth_fix() -> None:
     ) -> dict[str, Any]:
         try:
             return await original_request(self, message_type, data, timeout=timeout)
-        except TimeoutError as exc:
+        except (TimeoutError, asyncio.TimeoutError) as exc:
             if message_type == "AuthenticationTokenRequest":
                 raise RuntimeError(
                     "已经连接到 VTube Studio 的 8001 端口，但等待插件授权超时。"
