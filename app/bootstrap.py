@@ -7,7 +7,7 @@ import uvicorn
 import app
 from app.providers import simli as simli_provider
 
-SERVER_VERSION = "0.9.2"
+SERVER_VERSION = "0.9.3"
 
 
 def _clamp_int(value: Any, minimum: int, maximum: int, default: int) -> int:
@@ -85,6 +85,10 @@ from app import main as app_main  # noqa: E402
 
 application = app_main.app
 settings = app_main.settings
+# A first-time VTube Studio token request intentionally waits for the user to
+# approve the plugin inside VTube Studio. Keep the server-to-Bridge request
+# alive even when an older .env still contains the previous 30-second value.
+settings.bridge_command_timeout = max(float(settings.bridge_command_timeout), 150.0)
 
 
 if __name__ == "__main__":
