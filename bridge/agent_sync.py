@@ -12,6 +12,11 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 from bridge import agent, simli_session
 from bridge.control_channel import install_bridge_control_guard
+from bridge.domestic_provider_scaffolds import (
+    DOMESTIC_PROVIDER_TYPES,
+    start_domestic_provider,
+    stop_domestic_provider,
+)
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -31,13 +36,17 @@ from bridge.simli_diagnostics import (
     manager_diagnostic_report,
     run_manager_diagnostic,
 )
-from bridge.simli_link_diagnostics import (
-    install_link_diagnostics,
+from bridge.simli_link_diagnostics import install_link_diagnostics
+from bridge.simli_link_diagnostics_v2 import (
+    install_link_diagnostics_v2,
+    manager_begin_link_test,
     manager_link_report,
     manager_link_status,
 )
 from bridge.simli_link_runtime import install_link_runtime_timestamps
+from bridge.simli_network_policy import install_simli_network_policy
 from bridge.simli_realtime_fix import install_simli_realtime_fix
+from bridge.simli_realtime_v2 import install_simli_realtime_v2
 from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
 from bridge.simli_sync_compat import install_audio_iterator_compat
 from bridge.simli_tuning import (
@@ -49,7 +58,7 @@ from bridge.simli_tuning import (
 from bridge.simli_waveout import install_simli_waveout_patch
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.7.0"
+BRIDGE_VERSION = "0.7.1"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -74,6 +83,8 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
                 "phase_zh": runtime.state.get("phase_zh"),
                 "sent_chunks": runtime.state.get("sent_chunks"),
                 "last_input_dbfs": runtime.state.get("last_input_dbfs"),
+                "network_policy": runtime.state.get("network_policy"),
+                "last_idle_trim": runtime.state.get("last_idle_trim"),
                 "renderer_task_done": bool(runtime.renderer_task and runtime.renderer_task.done()),
                 "sender_task_done": bool(runtime.sender_task and runtime.sender_task.done()),
                 "capture_thread_alive": bool(runtime.capture_thread and runtime.capture_thread.is_alive()),
@@ -98,12 +109,16 @@ def install() -> None:
     install_simli_waveout_patch(SimliSynchronizedRenderer)
     install_simli_runtime_guard(simli_session.SimliRuntime)
     install_simli_sync_patch(simli_session)
-    # Final realtime patch: status is O(1), diagnostics no longer block the event loop,
-    # and waveOut keeps multiple short buffers queued for continuous playback.
+    # Final realtime v1 patch: O(1) status and short buffered waveOut playback.
     install_simli_realtime_fix(SimliSynchronizedRenderer, simli_session.SimliRuntime)
-    # Timestamp GPT_OUT capture/send stages, then start an independent RTC/local link monitor.
+    # Timestamp GPT_OUT stages, then add utterance-aware idle-media trimming.
     install_link_runtime_timestamps(simli_session.SimliRuntime)
+    install_simli_realtime_v2(SimliSynchronizedRenderer, simli_session.SimliRuntime)
+    # Keep the v1 monitor lifecycle, then replace its sampling/report logic with v2.
     install_link_diagnostics(simli_session.SimliRuntime)
+    install_link_diagnostics_v2(simli_session.SimliRuntime)
+    # Apply the requested environment proxy policy before the SDK starts.
+    install_simli_network_policy(simli_session.SimliRuntime)
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
@@ -119,7 +134,14 @@ def install() -> None:
             "provider.simli.tuning.lightweight_status",
             "provider.simli.realtime_status",
             "provider.simli.link_diagnostics",
+            "provider.simli.link_diagnostics.v2",
+            "provider.simli.link.test_epoch",
             "provider.simli.rtc_stats",
+            "provider.simli.low_latency_idle_trim",
+            "provider.simli.network_policy",
+            "provider.tencent_digital_human.reserved",
+            "provider.aliyun_avatar.reserved",
+            "provider.baidu_xiling.reserved",
             "audio.live_out.auto",
             "audio.live_out.waveout",
             "audio.live_out.buffered_waveout",
@@ -148,10 +170,18 @@ def install() -> None:
                     session_id=config["_session_id"],
                     transport=config.get("transport"),
                     model=config.get("model"),
+                    network_mode=config.get("network_mode"),
+                    low_latency_idle_trim=config.get("low_latency_idle_trim"),
                     face_id_present=bool(config.get("face_id")),
                     play_return_audio=config.get("play_return_audio"),
                 )
-            if command_type == "provider.simli.status":
+
+            provider_type = str(payload.get("provider_type") or "")
+            if command_type == "provider.start_session" and provider_type in DOMESTIC_PROVIDER_TYPES:
+                result = start_domestic_provider(payload)
+            elif command_type == "provider.stop_session" and provider_type in DOMESTIC_PROVIDER_TYPES:
+                result = stop_domestic_provider(payload)
+            elif command_type == "provider.simli.status":
                 result = self.simli.status()
             elif command_type == "provider.simli.link.get":
                 result = manager_link_status(
@@ -160,6 +190,11 @@ def install() -> None:
                 )
             elif command_type == "provider.simli.link.report":
                 result = manager_link_report(
+                    self.simli,
+                    session_id=str(payload.get("session_id") or "") or None,
+                )
+            elif command_type == "provider.simli.link.test.begin":
+                result = manager_begin_link_test(
                     self.simli,
                     session_id=str(payload.get("session_id") or "") or None,
                 )
