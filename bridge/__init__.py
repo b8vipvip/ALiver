@@ -3,9 +3,11 @@
 from bridge.vtube_motion import install_vtube_motion_patch
 from bridge.vtube_motion_control import install_vtube_motion_control_patch
 from bridge.vtube_motion_safety import install_vtube_motion_safety_patch
+from bridge.vtube_motion_v2 import install_vtube_motion_v2_patch
 from bridge.vtube_studio_auth_fix import install_vtube_studio_auth_fix
 
 install_vtube_studio_auth_fix()
 install_vtube_motion_patch()
 install_vtube_motion_safety_patch()
+install_vtube_motion_v2_patch()
 install_vtube_motion_control_patch()
