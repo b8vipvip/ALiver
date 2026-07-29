@@ -5,6 +5,35 @@
   if (!form || !typeSelect || !submit || document.getElementById('aliver-provider-catalog')) return;
 
   const catalog = {
+    vtube_studio: {
+      label: 'VTube Studio（本地虚拟形象）',
+      name: 'Local VTube Studio',
+      apiBaseUrl: '',
+      credentials: {},
+      settings: {
+        ws_url: 'ws://127.0.0.1:8001',
+        plugin_name: 'ALiver',
+        plugin_developer: 'b8vipvip',
+        require_model_loaded: true,
+        auto_reconnect: true,
+        reconnect_interval_seconds: 2,
+        connect_timeout_seconds: 12,
+        authorization_timeout_seconds: 20,
+        action_cooldown_ms: 1200,
+        audio_device_name: 'CABLE Output (VB-Audio Virtual Cable)',
+        mouth_input_parameter: 'VoiceVolume',
+        mouth_output_parameter: 'ParamMouthOpenY',
+        hotkeys: {
+          idle: '',
+          talking: '',
+          thinking: '',
+          wave: '',
+          happy: '',
+          surprised: '',
+          reset: '',
+        },
+      },
+    },
     tencent_digital_human: {
       label: '腾讯云智能数智人（预留适配）',
       name: 'Tencent Digital Human',
@@ -63,6 +92,7 @@
   box.id = 'aliver-provider-catalog';
   box.className = 'actions';
   box.innerHTML = `
+    <button type="button" class="secondary" data-provider-template="vtube_studio">VTube Studio 模板</button>
     <button type="button" class="secondary" data-provider-template="tencent_digital_human">腾讯模板</button>
     <button type="button" class="secondary" data-provider-template="aliyun_avatar">阿里模板</button>
     <button type="button" class="secondary" data-provider-template="baidu_xiling">百度模板</button>
@@ -78,13 +108,32 @@
       form.querySelector('[name="api_base_url"]').value = row.apiBaseUrl;
       form.querySelector('[name="credentials"]').value = JSON.stringify(row.credentials, null, 2);
       form.querySelector('[name="settings"]').value = JSON.stringify(row.settings, null, 2);
-      toast(`${row.label}配置模板已填入。当前为 Provider/Bridge 预留适配层，尚未建立厂商 RTC 媒体连接。`);
+      if (key === 'vtube_studio') {
+        toast('已填入 VTube Studio 本地模板。请先启动 VTube Studio、加载模型并开启 8001 插件 API。');
+      } else {
+        toast(`${row.label}配置模板已填入。当前为 Provider/Bridge 预留适配层，尚未建立厂商 RTC 媒体连接。`);
+      }
     });
   });
 
   const bridgeSelect = document.getElementById('session-bridge');
   const bridgeLabel = bridgeSelect?.closest('label');
   if (bridgeLabel?.firstChild) {
-    bridgeLabel.firstChild.textContent = 'Bridge（实时数字人供应商必选）';
+    bridgeLabel.firstChild.textContent = 'Bridge（实时/本地数字人供应商必选）';
+  }
+
+  if (!document.getElementById('aliver-avatar-debug-style')) {
+    const stylesheet = document.createElement('link');
+    stylesheet.id = 'aliver-avatar-debug-style';
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.2';
+    document.head.appendChild(stylesheet);
+  }
+  if (!document.getElementById('aliver-avatar-debug-v2')) {
+    const script = document.createElement('script');
+    script.id = 'aliver-avatar-debug-v2';
+    script.src = '/static/avatar_debug_v2.js?v=0.9.2';
+    script.async = false;
+    document.head.appendChild(script);
   }
 })();

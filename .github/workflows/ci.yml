@@ -29,6 +29,7 @@ jobs:
       - run: node --check app/static/simli_link_diagnostics.js
       - run: node --check app/static/simli_link_diagnostics_v2.js
       - run: node --check app/static/provider_catalog.js
+      - run: node --check app/static/avatar_debug_v2.js
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
       - run: ruff check app bridge tests

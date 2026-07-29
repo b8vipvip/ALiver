@@ -3,10 +3,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+PROVIDER_TYPE_PATTERN = (
+    "^(mock|tavus|akool|liveavatar|simli|vtube_studio|local_vtube_studio|"
+    "tencent_digital_human|aliyun_avatar|baidu_xiling)$"
+)
+
 
 class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    provider_type: str = Field(pattern="^(mock|tavus|akool|liveavatar|simli)$")
+    provider_type: str = Field(pattern=PROVIDER_TYPE_PATTERN)
     enabled: bool = True
     api_base_url: str | None = None
     credentials: dict[str, Any] = Field(default_factory=dict)
