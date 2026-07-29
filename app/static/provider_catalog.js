@@ -175,4 +175,11 @@
     script.async = false;
     document.head.appendChild(script);
   }
+  if (!document.getElementById('aliver-vtube-motion-controls-fix')) {
+    const script = document.createElement('script');
+    script.id = 'aliver-vtube-motion-controls-fix';
+    script.src = '/static/vtube_motion_controls_fix.js?v=0.9.7';
+    script.async = false;
+    document.head.appendChild(script);
+  }
 })();
