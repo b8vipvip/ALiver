@@ -32,6 +32,24 @@
           surprised: '',
           reset: '',
         },
+        motion_engine: {
+          enabled: false,
+          preset: 'gentle',
+          fps: 15,
+          auto_speech: true,
+          voice_parameter: 'VoiceVolume',
+          speech_threshold: 0.08,
+          speech_hold_ms: 500,
+          idle_intensity: 0.55,
+          talking_intensity: 0.85,
+          action_intensity: 1.0,
+          expressions_enabled: true,
+          expression_map: {
+            thinking: '',
+            happy: '',
+            surprised: '',
+          },
+        },
       },
     },
     tencent_digital_human: {
@@ -109,7 +127,7 @@
       form.querySelector('[name="credentials"]').value = JSON.stringify(row.credentials, null, 2);
       form.querySelector('[name="settings"]').value = JSON.stringify(row.settings, null, 2);
       if (key === 'vtube_studio') {
-        toast('已填入 VTube Studio 本地模板。启动会话后请切回 VTube Studio，在授权弹窗中点击“允许”；系统最多等待 120 秒。');
+        toast('已填入 VTube Studio 本地模板。启动会话后可在数字人调试页一键启用自然动作。');
       } else {
         toast(`${row.label}配置模板已填入。当前为 Provider/Bridge 预留适配层，尚未建立厂商 RTC 媒体连接。`);
       }
@@ -126,27 +144,34 @@
     const stylesheet = document.createElement('link');
     stylesheet.id = 'aliver-avatar-debug-style';
     stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.6';
+    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.7';
     document.head.appendChild(stylesheet);
   }
   if (!document.getElementById('aliver-avatar-debug-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-avatar-debug-v2';
-    script.src = '/static/avatar_debug_v2.js?v=0.9.6';
+    script.src = '/static/avatar_debug_v2.js?v=0.9.7';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-management-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-management-v2';
-    script.src = '/static/management_v2.js?v=0.9.6';
+    script.src = '/static/management_v2.js?v=0.9.7';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-audio-route-autostart')) {
     const script = document.createElement('script');
     script.id = 'aliver-audio-route-autostart';
-    script.src = '/static/audio_route_autostart.js?v=0.9.6';
+    script.src = '/static/audio_route_autostart.js?v=0.9.7';
+    script.async = false;
+    document.head.appendChild(script);
+  }
+  if (!document.getElementById('aliver-vtube-motion-wizard')) {
+    const script = document.createElement('script');
+    script.id = 'aliver-vtube-motion-wizard';
+    script.src = '/static/vtube_motion_wizard.js?v=0.9.7';
     script.async = false;
     document.head.appendChild(script);
   }
