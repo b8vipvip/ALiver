@@ -11,6 +11,24 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))
 
 
+def _mouth_parameter(payload: dict[str, Any], preferred: str | None = None) -> tuple[str, float] | None:
+    rows = payload.get("parameters")
+    if not isinstance(rows, list):
+        return None
+    candidates = [preferred, "ParamMouthOpenY", "MouthOpenY"]
+    names = [str(name).casefold() for name in candidates if name]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip()
+        if name.casefold() in names:
+            try:
+                return name, abs(float(row.get("value", 0.0)))
+            except (TypeError, ValueError):
+                return name, 0.0
+    return None
+
+
 def install_vtube_motion_v2_patch() -> None:
     engine_class = vtube_motion.VTubeMotionEngine
     if getattr(engine_class, "_aliver_motion_v2", False):
@@ -32,10 +50,40 @@ def install_vtube_motion_v2_patch() -> None:
         self._speech_stopped_monotonic = 0.0
         self._previous_speaking = False
         self._speech_motion_gain = 0.0
+        self._speech_signal_source = "voice_parameter"
+        self._last_mouth_fallback_poll = 0.0
+        self._mouth_fallback_parameter = "ParamMouthOpenY"
 
     async def patched_poll_voice(self: Any, now: float) -> None:
         previous = bool(getattr(self, "_speaking", False))
         await original_poll_voice(self, now)
+        threshold = float(self.config.get("speech_threshold", 0.08))
+        self._speech_signal_source = "voice_parameter"
+
+        # Some VTube Studio audio setups animate ParamMouthOpenY while VoiceVolume
+        # remains close to zero. Poll the model output at a conservative 4 Hz only
+        # while the primary signal is quiet, then use it as the speech trigger.
+        if (
+            float(getattr(self, "_voice_value", 0.0)) < threshold
+            and now - float(getattr(self, "_last_mouth_fallback_poll", 0.0)) >= 0.25
+            and hasattr(self.client, "live2d_parameters")
+        ):
+            self._last_mouth_fallback_poll = now
+            try:
+                payload = await self.client.live2d_parameters()
+                match = _mouth_parameter(payload, getattr(self, "_mouth_fallback_parameter", None))
+                if match is not None:
+                    self._mouth_fallback_parameter, mouth_value = match
+                    fallback_threshold = max(0.025, threshold * 0.55)
+                    if mouth_value >= fallback_threshold:
+                        self._voice_value = max(float(self._voice_value), mouth_value)
+                        self._last_voice_at = now
+                        hold = float(self.config["speech_hold_ms"]) / 1000.0
+                        self._speaking = now - self._last_voice_at <= hold
+                        self._speech_signal_source = "live2d_mouth"
+            except Exception as exc:
+                self._last_error = f"{type(exc).__name__}: {exc}"
+
         current = bool(getattr(self, "_speaking", False))
         if current and not previous:
             self._speech_started_monotonic = now
@@ -170,6 +218,12 @@ def install_vtube_motion_v2_patch() -> None:
             {
                 "algorithm_version": 2,
                 "speech_motion_gain": round(float(getattr(self, "_speech_motion_gain", 0.0)), 3),
+                "speech_signal_source": str(
+                    getattr(self, "_speech_signal_source", "voice_parameter")
+                ),
+                "mouth_fallback_parameter": str(
+                    getattr(self, "_mouth_fallback_parameter", "ParamMouthOpenY")
+                ),
                 "speech_started_monotonic": round(
                     float(getattr(self, "_speech_started_monotonic", 0.0)), 3
                 ),
