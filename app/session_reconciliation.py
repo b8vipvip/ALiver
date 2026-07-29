@@ -47,6 +47,24 @@ def classify_local_session(local_state: Any) -> tuple[str, str] | None:
     return None
 
 
+def _local_sessions(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    generic = metadata.get("avatar_sessions")
+    if isinstance(generic, dict):
+        return generic
+
+    # Backward compatibility with Bridge versions that only reported Simli sessions.
+    simli = metadata.get("simli_sessions")
+    vtube = metadata.get("vtube_studio_sessions")
+    if isinstance(simli, dict) or isinstance(vtube, dict):
+        merged: dict[str, Any] = {}
+        if isinstance(simli, dict):
+            merged.update(simli)
+        if isinstance(vtube, dict):
+            merged.update(vtube)
+        return merged
+    return None
+
+
 def reconcile_bridge_sessions(
     db: Session,
     bridge_id: str,
@@ -54,8 +72,8 @@ def reconcile_bridge_sessions(
 ) -> list[dict[str, Any]]:
     if not isinstance(metadata, dict):
         return []
-    local_sessions = metadata.get("simli_sessions")
-    if not isinstance(local_sessions, dict):
+    local_sessions = _local_sessions(metadata)
+    if local_sessions is None:
         return []
 
     rows = db.scalars(
