@@ -7,7 +7,7 @@ import uvicorn
 import app
 from app.providers import simli as simli_provider
 
-SERVER_VERSION = "0.9.0"
+SERVER_VERSION = "0.9.1"
 
 
 def _clamp_int(value: Any, minimum: int, maximum: int, default: int) -> int:
