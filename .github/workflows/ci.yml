@@ -33,6 +33,7 @@ jobs:
       - run: node --check app/static/management_v2.js
       - run: node --check app/static/audio_route_autostart.js
       - run: node --check app/static/vtube_motion_wizard.js
+      - run: node --check app/static/vtube_motion_controls_fix.js
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
       - run: ruff check app bridge tests
