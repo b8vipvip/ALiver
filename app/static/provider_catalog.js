@@ -126,20 +126,27 @@
     const stylesheet = document.createElement('link');
     stylesheet.id = 'aliver-avatar-debug-style';
     stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.4';
+    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.5';
     document.head.appendChild(stylesheet);
   }
   if (!document.getElementById('aliver-avatar-debug-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-avatar-debug-v2';
-    script.src = '/static/avatar_debug_v2.js?v=0.9.4';
+    script.src = '/static/avatar_debug_v2.js?v=0.9.5';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-management-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-management-v2';
-    script.src = '/static/management_v2.js?v=0.9.4';
+    script.src = '/static/management_v2.js?v=0.9.5';
+    script.async = false;
+    document.head.appendChild(script);
+  }
+  if (!document.getElementById('aliver-audio-route-autostart')) {
+    const script = document.createElement('script');
+    script.id = 'aliver-audio-route-autostart';
+    script.src = '/static/audio_route_autostart.js?v=0.9.5';
     script.async = false;
     document.head.appendChild(script);
   }
