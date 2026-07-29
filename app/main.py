@@ -12,8 +12,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import auto_director, bridges, dashboard, director, health, logs, providers, sessions
+from app.api import avatar_actions, auto_director, bridges, dashboard, director, health, logs, providers, sessions
 from app.auto_director_service import auto_director_worker
+from app.avatar_action_service import schedule_chatgpt_status
 from app.bridge_hub import bridge_hub
 from app.config import get_settings
 from app.db import SessionLocal, init_db
@@ -71,6 +72,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(health.router)
 app.include_router(providers.router)
 app.include_router(sessions.router)
+app.include_router(avatar_actions.router)
 app.include_router(bridges.router)
 app.include_router(director.router)
 app.include_router(auto_director.router)
@@ -218,6 +220,11 @@ async def extension_websocket(
                         reported_version = incoming.get("extension_version")
                         if reported_version:
                             extension.version = str(reported_version)[:40]
+                        if message_type == "page.status" and "generating" in incoming:
+                            schedule_chatgpt_status(
+                                extension_id,
+                                generating=bool(incoming.get("generating")),
+                            )
                     extension.metadata_json = dumps(metadata)
                     if message.get("url"):
                         extension.active_tab_url = str(message["url"])[:1000]
