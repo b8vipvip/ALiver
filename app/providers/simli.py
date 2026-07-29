@@ -8,6 +8,7 @@ import httpx
 from app.providers.base import AvatarProvider, ProviderResult
 
 DEFAULT_API_BASE_URL = "https://api.simli.ai"
+NETWORK_MODES = {"inherit", "no_proxy", "direct_env"}
 
 
 class SimliProvider(AvatarProvider):
@@ -37,6 +38,9 @@ class SimliProvider(AvatarProvider):
         model = str(values.get("model", "fasttalk")).strip().lower()
         if model not in {"fasttalk", "artalk"}:
             raise ValueError("settings.model must be fasttalk or artalk")
+        network_mode = str(values.get("network_mode", "direct_env")).strip().lower()
+        if network_mode not in NETWORK_MODES:
+            raise ValueError("settings.network_mode must be inherit, no_proxy or direct_env")
 
         window_size = values.get("window_size", [720, 720])
         if not isinstance(window_size, list) or len(window_size) != 2:
@@ -58,6 +62,17 @@ class SimliProvider(AvatarProvider):
             "audio_output_device_index": values.get("audio_output_device_index"),
             "retry_count": max(1, min(int(values.get("retry_count", 2)), 8)),
             "retry_timeout": max(1.0, min(float(values.get("retry_timeout", 8.0)), 60.0)),
+            "network_mode": network_mode,
+            "low_latency_idle_trim": bool(values.get("low_latency_idle_trim", True)),
+            "idle_trim_arm_seconds": max(
+                0.25, min(float(values.get("idle_trim_arm_seconds", 0.8)), 5.0)
+            ),
+            "idle_trim_target_audio_ms": max(
+                180, min(int(values.get("idle_trim_target_audio_ms", 420)), 1500)
+            ),
+            "idle_trim_target_video_ms": max(
+                150, min(int(values.get("idle_trim_target_video_ms", 500)), 2000)
+            ),
         }
 
     async def test_connection(self) -> ProviderResult:
@@ -69,13 +84,17 @@ class SimliProvider(AvatarProvider):
 
         request_body = {
             "faceId": config["face_id"],
+            "apiVersion": "v2",
             "handleSilence": config["handle_silence"],
             "maxSessionLength": 60,
             "maxIdleTime": 15,
             "model": config["model"],
         }
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(
+                timeout=20.0,
+                trust_env=config["network_mode"] == "inherit",
+            ) as client:
                 response = await client.post(
                     f"{config['api_base_url']}/compose/token",
                     headers={
@@ -99,6 +118,7 @@ class SimliProvider(AvatarProvider):
                     "face_id": config["face_id"],
                     "transport": config["transport"],
                     "model": config["model"],
+                    "network_mode": config["network_mode"],
                     "execution_mode": self.execution_mode,
                 },
                 latency_ms=round((time.perf_counter() - started) * 1000),
