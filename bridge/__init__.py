@@ -1,5 +1,6 @@
 """ALiver Windows Bridge package initialization."""
 
+from bridge.avatar_action_control import install_avatar_action_control_patch
 from bridge.vtube_motion import install_vtube_motion_patch
 from bridge.vtube_motion_control import install_vtube_motion_control_patch
 from bridge.vtube_motion_safety import install_vtube_motion_safety_patch
@@ -10,4 +11,5 @@ install_vtube_studio_auth_fix()
 install_vtube_motion_patch()
 install_vtube_motion_safety_patch()
 install_vtube_motion_v2_patch()
+install_avatar_action_control_patch()
 install_vtube_motion_control_patch()
