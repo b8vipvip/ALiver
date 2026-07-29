@@ -140,46 +140,31 @@
     bridgeLabel.firstChild.textContent = 'Bridge（实时/本地数字人供应商必选）';
   }
 
-  if (!document.getElementById('aliver-avatar-debug-style')) {
-    const stylesheet = document.createElement('link');
-    stylesheet.id = 'aliver-avatar-debug-style';
-    stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.8';
-    document.head.appendChild(stylesheet);
-  }
-  if (!document.getElementById('aliver-avatar-debug-v2')) {
-    const script = document.createElement('script');
-    script.id = 'aliver-avatar-debug-v2';
-    script.src = '/static/avatar_debug_v2.js?v=0.9.8';
-    script.async = false;
-    document.head.appendChild(script);
-  }
-  if (!document.getElementById('aliver-management-v2')) {
-    const script = document.createElement('script');
-    script.id = 'aliver-management-v2';
-    script.src = '/static/management_v2.js?v=0.9.8';
-    script.async = false;
-    document.head.appendChild(script);
-  }
-  if (!document.getElementById('aliver-audio-route-autostart')) {
-    const script = document.createElement('script');
-    script.id = 'aliver-audio-route-autostart';
-    script.src = '/static/audio_route_autostart.js?v=0.9.8';
-    script.async = false;
-    document.head.appendChild(script);
-  }
-  if (!document.getElementById('aliver-vtube-motion-wizard')) {
-    const script = document.createElement('script');
-    script.id = 'aliver-vtube-motion-wizard';
-    script.src = '/static/vtube_motion_wizard.js?v=0.9.8';
-    script.async = false;
-    document.head.appendChild(script);
-  }
-  if (!document.getElementById('aliver-vtube-motion-controls-fix')) {
-    const script = document.createElement('script');
-    script.id = 'aliver-vtube-motion-controls-fix';
-    script.src = '/static/vtube_motion_controls_fix.js?v=0.9.8';
-    script.async = false;
-    document.head.appendChild(script);
-  }
+  const assets = [
+    ['link', 'aliver-avatar-debug-style', '/static/avatar_debug_v2.css?v=0.9.9'],
+    ['link', 'aliver-avatar-action-runtime-style', '/static/avatar_action_runtime.css?v=0.9.9'],
+    ['script', 'aliver-avatar-debug-v2', '/static/avatar_debug_v2.js?v=0.9.9'],
+    ['script', 'aliver-management-v2', '/static/management_v2.js?v=0.9.9'],
+    ['script', 'aliver-audio-route-autostart', '/static/audio_route_autostart.js?v=0.9.9'],
+    ['script', 'aliver-vtube-motion-wizard', '/static/vtube_motion_wizard.js?v=0.9.9'],
+    ['script', 'aliver-vtube-motion-controls-fix', '/static/vtube_motion_controls_fix.js?v=0.9.9'],
+    ['script', 'aliver-avatar-action-runtime', '/static/avatar_action_runtime.js?v=0.9.9'],
+  ];
+
+  assets.forEach(([kind, id, href]) => {
+    if (document.getElementById(id)) return;
+    if (kind === 'link') {
+      const element = document.createElement('link');
+      element.id = id;
+      element.rel = 'stylesheet';
+      element.href = href;
+      document.head.appendChild(element);
+      return;
+    }
+    const element = document.createElement('script');
+    element.id = id;
+    element.src = href;
+    element.async = false;
+    document.head.appendChild(element);
+  });
 })();
