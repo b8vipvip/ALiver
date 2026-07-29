@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 import websockets
@@ -35,6 +36,7 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             "provider.vtube_studio.hotkeys",
             "provider.vtube_studio.actions",
             "provider.vtube_studio.authorization",
+            "provider.vtube_studio.live_config",
             "provider.avatar.active_session_metadata",
         ):
             if item not in values:
@@ -72,6 +74,24 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             return await self.vtube_studio.refresh(str(payload.get("session_id") or ""))
         if command_type == "provider.vtube_studio.authorize":
             return await self.vtube_studio.authorize(str(payload.get("session_id") or ""))
+        if command_type == "provider.vtube_studio.configure":
+            session_id = str(payload.get("session_id") or "")
+            runtime = self.vtube_studio._runtime(session_id)
+            hotkeys = payload.get("hotkeys")
+            if hotkeys is not None:
+                if not isinstance(hotkeys, dict):
+                    raise ValueError("hotkeys must be a JSON object")
+                runtime.config["hotkeys"] = {
+                    str(key).strip().lower(): str(value or "").strip()
+                    for key, value in hotkeys.items()
+                }
+            if payload.get("action_cooldown_ms") is not None:
+                runtime.config["action_cooldown_ms"] = max(
+                    0,
+                    min(int(payload["action_cooldown_ms"]), 30000),
+                )
+            runtime.state["last_refresh_at"] = datetime.now(timezone.utc).isoformat()
+            return runtime.status()
         if command_type == "provider.vtube_studio.action":
             return await self.vtube_studio.action(
                 str(payload.get("session_id") or ""),
