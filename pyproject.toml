@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.9.8"
+version = "0.9.9"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -53,5 +53,9 @@ ignore = ["B008"]
 "bridge/simli_link_diagnostics_v2.py" = ["E501"]
 "bridge/simli_realtime_v2.py" = ["E501"]
 "bridge/vtube_motion_v2.py" = ["E501"]
+"bridge/avatar_action_router.py" = ["E501"]
+"bridge/avatar_action_control.py" = ["E501"]
+"app/avatar_action_service.py" = ["E501"]
 "tests/test_vtube_motion_v2.py" = ["E501"]
+"tests/test_avatar_action_router.py" = ["E501"]
 "app/providers/domestic_realtime.py" = ["E501"]
