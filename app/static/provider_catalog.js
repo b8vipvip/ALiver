@@ -18,7 +18,7 @@
         auto_reconnect: true,
         reconnect_interval_seconds: 2,
         connect_timeout_seconds: 12,
-        authorization_timeout_seconds: 20,
+        authorization_timeout_seconds: 120,
         action_cooldown_ms: 1200,
         audio_device_name: 'CABLE Output (VB-Audio Virtual Cable)',
         mouth_input_parameter: 'VoiceVolume',
@@ -109,7 +109,7 @@
       form.querySelector('[name="credentials"]').value = JSON.stringify(row.credentials, null, 2);
       form.querySelector('[name="settings"]').value = JSON.stringify(row.settings, null, 2);
       if (key === 'vtube_studio') {
-        toast('已填入 VTube Studio 本地模板。请先启动 VTube Studio、加载模型并开启 8001 插件 API。');
+        toast('已填入 VTube Studio 本地模板。启动会话后请切回 VTube Studio，在授权弹窗中点击“允许”；系统最多等待 120 秒。');
       } else {
         toast(`${row.label}配置模板已填入。当前为 Provider/Bridge 预留适配层，尚未建立厂商 RTC 媒体连接。`);
       }
@@ -126,13 +126,13 @@
     const stylesheet = document.createElement('link');
     stylesheet.id = 'aliver-avatar-debug-style';
     stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.2';
+    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.3';
     document.head.appendChild(stylesheet);
   }
   if (!document.getElementById('aliver-avatar-debug-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-avatar-debug-v2';
-    script.src = '/static/avatar_debug_v2.js?v=0.9.2';
+    script.src = '/static/avatar_debug_v2.js?v=0.9.3';
     script.async = false;
     document.head.appendChild(script);
   }
