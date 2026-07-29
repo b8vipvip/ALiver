@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.avatar_action_service import schedule_director_command_action
 from app.extension_hub import extension_hub
 from app.json_utils import loads
 from app.models import DirectorCommand
@@ -47,6 +48,7 @@ async def dispatch_command(db: Session, row: DirectorCommand) -> bool:
     row.dispatched_at = utcnow()
     row.error_message = None
     db.commit()
+    schedule_director_command_action(row)
     return True
 
 
