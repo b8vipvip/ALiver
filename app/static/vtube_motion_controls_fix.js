@@ -6,21 +6,60 @@
     'vtube-motion-threshold',
     'vtube-motion-fps-input',
   ]);
-  const pending = new Map();
+  const guarded = new WeakSet();
+  const dirty = new WeakMap();
 
-  document.addEventListener('input', event => {
-    if (!CONTROL_IDS.has(event.target?.id)) return;
-    pending.set(event.target.id, event.target.value);
-  }, true);
+  function nativeDescriptor(element) {
+    const prototype = element instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : HTMLInputElement.prototype;
+    return Object.getOwnPropertyDescriptor(prototype, 'value');
+  }
 
-  document.addEventListener('change', event => {
-    if (!CONTROL_IDS.has(event.target?.id)) return;
-    pending.set(event.target.id, event.target.value);
-  }, true);
+  function guardControl(element) {
+    if (!element || guarded.has(element)) return;
+    const descriptor = nativeDescriptor(element);
+    if (!descriptor?.get || !descriptor?.set) return;
+    guarded.add(element);
+    dirty.set(element, false);
+
+    Object.defineProperty(element, 'value', {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get() {
+        return descriptor.get.call(this);
+      },
+      set(nextValue) {
+        const userEditing = dirty.get(this) || document.activeElement === this;
+        if (userEditing) return;
+        descriptor.set.call(this, nextValue);
+      },
+    });
+
+    const markDirty = () => dirty.set(element, true);
+    element.addEventListener('pointerdown', markDirty, true);
+    element.addEventListener('keydown', markDirty, true);
+    element.addEventListener('input', markDirty, true);
+    element.addEventListener('change', markDirty, true);
+  }
+
+  function installGuards() {
+    CONTROL_IDS.forEach(id => guardControl(document.getElementById(id)));
+  }
+
+  function releaseGuardsSoon() {
+    window.setTimeout(() => {
+      CONTROL_IDS.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) dirty.set(element, false);
+      });
+    }, 2500);
+  }
 
   document.addEventListener('click', event => {
-    if (!event.target?.closest('#vtube-motion-enable, #vtube-motion-disable')) return;
-    window.setTimeout(() => pending.clear(), 3500);
+    if (event.target?.closest('#vtube-motion-enable, #vtube-motion-disable')) {
+      releaseGuardsSoon();
+    }
   }, true);
 
   function repairProceduralActionLabel() {
@@ -39,10 +78,7 @@
   }
 
   window.setInterval(() => {
-    pending.forEach((value, id) => {
-      const element = document.getElementById(id);
-      if (element && element.value !== value) element.value = value;
-    });
+    installGuards();
     repairProceduralActionLabel();
-  }, 100);
+  }, 120);
 })();
