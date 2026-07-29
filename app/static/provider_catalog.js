@@ -40,8 +40,8 @@
           voice_parameter: 'VoiceVolume',
           speech_threshold: 0.08,
           speech_hold_ms: 500,
-          idle_intensity: 0.55,
-          talking_intensity: 0.85,
+          idle_intensity: 0.5,
+          talking_intensity: 1.05,
           action_intensity: 1.0,
           expressions_enabled: true,
           expression_map: {
@@ -144,41 +144,41 @@
     const stylesheet = document.createElement('link');
     stylesheet.id = 'aliver-avatar-debug-style';
     stylesheet.rel = 'stylesheet';
-    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.7';
+    stylesheet.href = '/static/avatar_debug_v2.css?v=0.9.8';
     document.head.appendChild(stylesheet);
   }
   if (!document.getElementById('aliver-avatar-debug-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-avatar-debug-v2';
-    script.src = '/static/avatar_debug_v2.js?v=0.9.7';
+    script.src = '/static/avatar_debug_v2.js?v=0.9.8';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-management-v2')) {
     const script = document.createElement('script');
     script.id = 'aliver-management-v2';
-    script.src = '/static/management_v2.js?v=0.9.7';
+    script.src = '/static/management_v2.js?v=0.9.8';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-audio-route-autostart')) {
     const script = document.createElement('script');
     script.id = 'aliver-audio-route-autostart';
-    script.src = '/static/audio_route_autostart.js?v=0.9.7';
+    script.src = '/static/audio_route_autostart.js?v=0.9.8';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-vtube-motion-wizard')) {
     const script = document.createElement('script');
     script.id = 'aliver-vtube-motion-wizard';
-    script.src = '/static/vtube_motion_wizard.js?v=0.9.7';
+    script.src = '/static/vtube_motion_wizard.js?v=0.9.8';
     script.async = false;
     document.head.appendChild(script);
   }
   if (!document.getElementById('aliver-vtube-motion-controls-fix')) {
     const script = document.createElement('script');
     script.id = 'aliver-vtube-motion-controls-fix';
-    script.src = '/static/vtube_motion_controls_fix.js?v=0.9.7';
+    script.src = '/static/vtube_motion_controls_fix.js?v=0.9.8';
     script.async = false;
     document.head.appendChild(script);
   }
