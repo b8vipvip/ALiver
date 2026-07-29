@@ -1,4 +1,9 @@
 from app.providers.akool import AkoolProvider
+from app.providers.domestic_realtime import (
+    AliyunAvatarProvider,
+    BaiduXilingProvider,
+    TencentDigitalHumanProvider,
+)
 from app.providers.liveavatar import LiveAvatarProvider
 from app.providers.mock import MockProvider
 from app.providers.simli import SimliProvider
@@ -10,4 +15,7 @@ PROVIDER_CLASSES = {
     "akool": AkoolProvider,
     "liveavatar": LiveAvatarProvider,
     "simli": SimliProvider,
+    "tencent_digital_human": TencentDigitalHumanProvider,
+    "aliyun_avatar": AliyunAvatarProvider,
+    "baidu_xiling": BaiduXilingProvider,
 }
