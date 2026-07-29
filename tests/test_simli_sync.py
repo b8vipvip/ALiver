@@ -75,7 +75,7 @@ def test_provider_patch_forwards_sync_and_live_out_settings():
 
     config = provider._runtime_config()
 
-    assert SERVER_VERSION == "0.9.3"
+    assert SERVER_VERSION == "0.9.4"
     assert config["audio_output_device_name"] == "CABLE-B Input (VB-Audio Cable B)"
     assert config["auto_live_out"] is True
     assert config["sync_prebuffer_ms"] == 420
