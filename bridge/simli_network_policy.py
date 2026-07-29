@@ -79,6 +79,11 @@ def install_simli_network_policy(runtime_class: type) -> None:
     original_start = runtime_class.start
 
     async def patched_start(runtime: Any) -> dict[str, Any]:
+        # All monitor patches are installed before a runtime starts. Install the
+        # GPT_OUT-anchored timeline here so test epochs cannot capture idle events.
+        from bridge.simli_link_timeline_v2 import install_link_timeline_v2
+
+        install_link_timeline_v2()
         apply_simli_network_policy(runtime)
         return await original_start(runtime)
 
