@@ -61,8 +61,8 @@ class VTubeStudioProvider(AvatarProvider):
 
         return {
             "ws_url": _normalize_ws_url(values.get("ws_url")),
-            "plugin_name": plugin_name[:120],
-            "plugin_developer": plugin_developer[:120],
+            "plugin_name": plugin_name[:32],
+            "plugin_developer": plugin_developer[:32],
             "require_model_loaded": bool(values.get("require_model_loaded", True)),
             "auto_reconnect": bool(values.get("auto_reconnect", True)),
             "reconnect_interval_seconds": max(
@@ -72,7 +72,7 @@ class VTubeStudioProvider(AvatarProvider):
                 3.0, min(float(values.get("connect_timeout_seconds", 12.0)), 60.0)
             ),
             "authorization_timeout_seconds": max(
-                10.0, min(float(values.get("authorization_timeout_seconds", 20.0)), 25.0)
+                30.0, min(float(values.get("authorization_timeout_seconds", 120.0)), 300.0)
             ),
             "action_cooldown_ms": max(
                 0, min(int(values.get("action_cooldown_ms", 1200)), 30000)
@@ -103,6 +103,7 @@ class VTubeStudioProvider(AvatarProvider):
                 "ws_url": config["ws_url"],
                 "plugin_name": config["plugin_name"],
                 "require_model_loaded": config["require_model_loaded"],
+                "authorization_timeout_seconds": config["authorization_timeout_seconds"],
             },
         )
 

@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-local-only"
     admin_token: str | None = None
     log_level: str = "INFO"
-    bridge_command_timeout: float = 30.0
+    # VTube Studio's first AuthenticationTokenRequest waits for the user to click
+    # Allow inside VTube Studio, so the control-plane command must outlive that dialog.
+    bridge_command_timeout: float = 150.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
