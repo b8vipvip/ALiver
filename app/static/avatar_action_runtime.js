@@ -118,6 +118,7 @@
 
     const active = router.active;
     const state = active?.action || router.base_mode || router.next_state || 'idle';
+    const restoreState = active ? (router.base_mode || 'idle') : (router.next_state || router.base_mode || 'idle');
     const source = formatSource(active?.source, router);
     const remaining = Number(router.remaining_ms || 0);
     badge.textContent = '路由器运行中';
@@ -133,7 +134,7 @@
     document.getElementById('avatar-action-remaining').textContent = active
       ? `${(remaining / 1000).toFixed(1)} 秒`
       : '持续';
-    document.getElementById('avatar-action-restore').textContent = `下一状态：${LABELS[router.next_state] || router.next_state || '待机'}`;
+    document.getElementById('avatar-action-restore').textContent = `动作结束恢复：${LABELS[restoreState] || restoreState}`;
     document.getElementById('avatar-action-queue-count').textContent = String(router.queue_count || 0);
     document.getElementById('avatar-action-speech').textContent = router.speaking
       ? 'GPT_OUT：正在说话'
