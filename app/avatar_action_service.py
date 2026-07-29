@@ -145,13 +145,30 @@ def director_action_for_command(row: DirectorCommand) -> tuple[str, int, int]:
             int(payload.get("avatar_action_priority") or max(70, row.priority)),
             int(payload.get("avatar_action_duration_ms") or 3200),
         )
+
+    source = str(payload.get("source") or "").strip().lower()
+    text = f"{payload.get('content', '')} {payload.get('text', '')}".casefold()
+    if source == "auto_director":
+        if any(word in text for word in ("送出了礼物", "礼物", "感谢", "谢谢")):
+            return "happy", max(78, row.priority), 3000
+        if any(word in text for word in ("关注了直播间", "欢迎", "打招呼", "新观众")):
+            return "wave", max(80, row.priority), 2800
+        if any(word in text for word in ("震惊", "惊讶", "没想到", "意外")):
+            return "surprised", max(78, row.priority), 1900
     return "thinking", max(64, min(row.priority, 82)), 8000
 
 
 def schedule_director_command_action(row: DirectorCommand) -> None:
     action, priority, duration_ms = director_action_for_command(row)
     payload = loads(row.payload_json, {})
-    source = "director.explicit" if payload.get("avatar_action") else "director.command"
+    explicit = bool(payload.get("avatar_action"))
+    auto_source = str(payload.get("source") or "") == "auto_director"
+    if explicit:
+        source = "director.explicit"
+    elif auto_source:
+        source = "auto_director"
+    else:
+        source = "director.command"
     schedule_active_avatar_action(
         action,
         source=source,
@@ -174,25 +191,16 @@ def schedule_chatgpt_status(extension_id: str, *, generating: bool) -> None:
     if previous is current:
         return
     _extension_generating_state[extension_id] = current
-    if current:
-        schedule_active_avatar_action(
-            "thinking",
-            source="chatgpt.generating",
-            priority=64,
-            duration_ms=15_000,
-            interrupt=True,
-            correlation_id=extension_id,
-            metadata={"extension_id": extension_id, "generating": True},
-        )
-    else:
-        # This clears a stale thinking pose. GPT_OUT speech detection remains the source
-        # of truth for talking and will immediately restore talking when audio is present.
-        schedule_active_avatar_action(
-            "idle",
-            source="chatgpt.status",
-            priority=30,
-            duration_ms=0,
-            interrupt=False,
-            correlation_id=extension_id,
-            metadata={"extension_id": extension_id, "generating": False},
-        )
+    if not current:
+        # Speech detection or the action timeout restores the correct live base state.
+        # Do not let a low-priority idle signal interrupt a gift/welcome/manual action.
+        return
+    schedule_active_avatar_action(
+        "thinking",
+        source="chatgpt.generating",
+        priority=64,
+        duration_ms=12_000,
+        interrupt=True,
+        correlation_id=extension_id,
+        metadata={"extension_id": extension_id, "generating": True},
+    )
