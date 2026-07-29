@@ -67,14 +67,19 @@
       late_video_drop_ms: 250,
       audio_active_dbfs: -50,
       mouth_sensitivity: 1,
+      network_mode: 'direct_env',
+      low_latency_idle_trim: true,
+      idle_trim_arm_seconds: 0.8,
+      idle_trim_target_audio_ms: 420,
+      idle_trim_target_video_ms: 500,
     }, null, 2);
-    toast('已填入 Simli 音画同步模板。安装 CABLE-B 后会自动作为 LIVE_OUT。');
+    toast('已填入 Simli 低延迟模板。direct_env 会绕过 Python 环境代理；v2rayN TUN 模式仍需配置域名直连规则。');
   });
   form.querySelector('button[type="submit"]').before(helper);
 
   const bridgeSelect = document.getElementById('session-bridge');
   const bridgeLabel = bridgeSelect?.closest('label');
-  if (bridgeLabel?.firstChild) bridgeLabel.firstChild.textContent = 'Bridge（Simli / LiveAvatar 必选）';
+  if (bridgeLabel?.firstChild) bridgeLabel.firstChild.textContent = 'Bridge（实时数字人供应商必选）';
 })();
 
 (() => {
@@ -201,15 +206,16 @@
 
 (() => {
   for (const [src, id] of [
-    ['/static/diagnostics_zh.js?v=0.9.0', 'aliver-diagnostics-zh'],
-    ['/static/simli_tuning.js?v=0.9.0', 'aliver-simli-tuning'],
-    ['/static/simli_link_diagnostics.js?v=0.9.0', 'aliver-simli-link-diagnostics'],
+    ['/static/diagnostics_zh.js?v=0.9.1', 'aliver-diagnostics-zh'],
+    ['/static/simli_tuning.js?v=0.9.1', 'aliver-simli-tuning'],
+    ['/static/simli_link_diagnostics_v2.js?v=0.9.1', 'aliver-simli-link-diagnostics-v2'],
+    ['/static/provider_catalog.js?v=0.9.1', 'aliver-provider-catalog-script'],
   ]) {
     if (document.getElementById(id)) continue;
     const script = document.createElement('script');
     script.id = id;
     script.src = src;
-    script.defer = true;
+    script.async = false;
     document.head.appendChild(script);
   }
 })();
