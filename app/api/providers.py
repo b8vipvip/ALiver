@@ -19,6 +19,16 @@ router = APIRouter(
     dependencies=[Depends(require_admin_token)],
 )
 
+ACTIVE_SESSION_STATUSES = {
+    "starting",
+    "active",
+    "running",
+    "ready",
+    "awaiting_manual",
+    "reconnecting",
+    "stop_failed",
+}
+
 
 @router.get("", response_model=list[ProviderOut])
 def list_providers(db: Session = Depends(get_db)) -> list[ProviderOut]:
@@ -84,25 +94,54 @@ def update_provider(
         category="provider.updated",
         message=f"Provider updated: {row.name}",
         provider_id=row.id,
+        details={"updated_fields": sorted(values)},
     )
     return provider_to_out(row)
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_provider(provider_id: str, db: Session = Depends(get_db)) -> None:
+def delete_provider(
+    provider_id: str,
+    force: bool = False,
+    db: Session = Depends(get_db),
+) -> None:
     row = db.get(ProviderConfig, provider_id)
     if not row:
         raise HTTPException(status_code=404, detail="Provider not found")
-    session_count = len(
-        db.scalars(select(AvatarSession.id).where(AvatarSession.provider_config_id == provider_id)).all()
+
+    sessions = list(
+        db.scalars(
+            select(AvatarSession).where(AvatarSession.provider_config_id == provider_id)
+        ).all()
     )
-    if session_count:
+    active = [session for session in sessions if session.status in ACTIVE_SESSION_STATUSES]
+    if active:
         raise HTTPException(
             status_code=409,
-            detail="Provider has session history. Disable it instead of deleting it.",
+            detail="该供应商仍有运行中或停止失败的会话，请先停止这些会话再删除。",
         )
+    if sessions and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="该供应商存在会话历史。确认删除供应商及其会话历史后，请使用 force=true。",
+        )
+
+    session_ids = [session.id for session in sessions]
+    for session in sessions:
+        db.delete(session)
     db.delete(row)
     db.commit()
+    write_log(
+        db,
+        category="provider.deleted",
+        message=f"Provider deleted: {row.name}",
+        provider_id=provider_id,
+        details={
+            "provider_type": row.provider_type,
+            "deleted_session_count": len(session_ids),
+            "deleted_session_ids": session_ids,
+        },
+    )
 
 
 @router.post("/{provider_id}/test")
