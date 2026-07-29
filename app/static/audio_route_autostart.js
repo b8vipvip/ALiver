@@ -19,8 +19,9 @@
   function setRouteMessage(message, kind = 'warn') {
     const element = routeStatusElement();
     if (!element) return;
-    element.textContent = message;
-    element.className = `diagnosis ${kind}`;
+    const className = `diagnosis ${kind}`;
+    if (element.textContent !== message) element.textContent = message;
+    if (element.className !== className) element.className = className;
   }
 
   function routeIsReady(data) {
@@ -110,8 +111,17 @@
 })();
 
 (() => {
+  let observerTimer = null;
+
   function mappingPanel() {
     return document.getElementById('vtube-semantic-mapping-editor');
+  }
+
+  function setDiagnosis(element, message, kind) {
+    if (!element) return;
+    const className = `diagnosis ${kind}`;
+    if (element.textContent !== message) element.textContent = message;
+    if (element.className !== className) element.className = className;
   }
 
   function addActionGuide(panel) {
@@ -149,11 +159,13 @@
     });
     const duplicates = [...grouped.values()].filter(labels => labels.length > 1);
     if (duplicates.length) {
-      warning.textContent = `发现重复映射：${duplicates.map(labels => labels.join('、')).join('；')}。这些按钮会执行同一个动作，并不会表现出不同语义。`;
-      warning.className = 'diagnosis bad';
+      setDiagnosis(
+        warning,
+        `发现重复映射：${duplicates.map(labels => labels.join('、')).join('；')}。这些按钮会执行同一个动作，并不会表现出不同语义。`,
+        'bad',
+      );
     } else {
-      warning.textContent = '未发现重复动作映射。未配置的语义按钮保持不可用即可。';
-      warning.className = 'diagnosis good';
+      setDiagnosis(warning, '未发现重复动作映射。未配置的语义按钮保持不可用即可。', 'good');
     }
   }
 
@@ -184,13 +196,32 @@
     return true;
   }
 
+  function scheduleEnhance() {
+    if (observerTimer !== null) return;
+    observerTimer = window.setTimeout(() => {
+      observerTimer = null;
+      enhancePanel();
+    }, 120);
+  }
+
   function startActionGuide() {
     if (!enhancePanel()) {
       setTimeout(startActionGuide, 250);
       return;
     }
     const root = document.getElementById('tab-avatar-debug') || document.body;
-    new MutationObserver(() => enhancePanel()).observe(root, { childList: true, subtree: true });
+    const observer = new MutationObserver(mutations => {
+      const relevant = mutations.some(mutation => {
+        if (mutation.type !== 'childList' || (!mutation.addedNodes.length && !mutation.removedNodes.length)) return false;
+        if (mutation.target.id === 'vtube-semantic-mapping-editor') return true;
+        return [...mutation.addedNodes, ...mutation.removedNodes].some(node => (
+          node.nodeType === Node.ELEMENT_NODE
+          && (node.id === 'vtube-semantic-mapping-editor' || node.querySelector?.('#vtube-semantic-mapping-editor'))
+        ));
+      });
+      if (relevant) scheduleEnhance();
+    });
+    observer.observe(root, { childList: true, subtree: true });
   }
 
   startActionGuide();
