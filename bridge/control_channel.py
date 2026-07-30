@@ -44,6 +44,10 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             "douyin.visible.ocr",
             "douyin.visible.hybrid",
             "douyin.visible.autostart",
+            "douyin.visible.window_capture",
+            "douyin.visible.preview",
+            "douyin.visible.uia_probe",
+            "douyin.visible.diagnostics",
         ):
             if item not in values:
                 values.append(item)
@@ -109,6 +113,14 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             return await asyncio.to_thread(self.douyin_collector.scan_once)
         if command_type == "douyin.visible.calibrate_default":
             return await asyncio.to_thread(self.douyin_collector.calibrate_default)
+        if command_type == "douyin.visible.preview":
+            return await asyncio.to_thread(self.douyin_collector.preview)
+        if command_type == "douyin.visible.uia_probe":
+            return await asyncio.to_thread(self.douyin_collector.probe_uia)
+        if command_type == "douyin.visible.export_diagnostics":
+            return await asyncio.to_thread(self.douyin_collector.export_diagnostics)
+        if command_type == "douyin.visible.clear_local_history":
+            return await asyncio.to_thread(self.douyin_collector.clear_local_history)
         return await original_execute(self, command_type, payload)
 
     async def safe_send(self, ws, payload: dict[str, Any]) -> bool:
