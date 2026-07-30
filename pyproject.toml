@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.12.2"
+version = "0.12.3"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,62 +10,3 @@ dependencies = [
   "sqlalchemy>=2.0,<3.0",
   "pydantic>=2.8,<3.0",
   "pydantic-settings>=2.4,<3.0",
-  "httpx>=0.27,<1.0",
-  "cryptography>=43,<46",
-  "jinja2>=3.1,<4.0",
-  "python-multipart>=0.0.9,<1.0",
-  "websockets>=14,<16",
-  "numpy>=1.26,<3",
-  "PyAudioWPatch>=0.2.12.8,<0.3; sys_platform == 'win32'",
-  "opencv-python>=4.10,<5.0; sys_platform == 'win32'",
-  "pywinauto>=0.6.9,<0.7; sys_platform == 'win32'",
-  "pywin32>=306,<400; sys_platform == 'win32'",
-  "mss>=10,<11; sys_platform == 'win32'",
-  "rapidocr>=3.8,<4; sys_platform == 'win32'",
-  "onnxruntime>=1.20,<2; sys_platform == 'win32'",
-  "pillow>=10,<13; sys_platform == 'win32'",
-]
-
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.2,<9.0",
-  "pytest-asyncio>=0.24,<1.0",
-  "ruff>=0.8,<1.0",
-]
-
-[tool.setuptools.packages.find]
-include = ["app*", "bridge*"]
-exclude = ["chrome_extension*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
-
-[tool.ruff]
-line-length = 120
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
-ignore = ["B008"]
-
-[tool.ruff.lint.per-file-ignores]
-"app/main.py" = ["I001"]
-"bridge/audio_capture.py" = ["F841"]
-"bridge/runtime_diagnostics.py" = ["I001"]
-"bridge/douyin_visible_collector.py" = ["E501", "I001"]
-"bridge/douyin_visible_runtime_patch.py" = ["E501"]
-"bridge/vtube_motion_v2.py" = ["E501"]
-"bridge/avatar_action_router.py" = ["E501", "UP035"]
-"bridge/avatar_action_control.py" = ["E501", "I001"]
-"app/avatar_action_service.py" = ["E501"]
-"app/pro_director_service.py" = ["E501"]
-"app/director_plan_service.py" = ["E501"]
-"app/douyin_live_service.py" = ["E501"]
-"app/api/auto_director.py" = ["E501"]
-"app/api/douyin_live.py" = ["E501"]
-"tests/test_vtube_motion_v2.py" = ["E501"]
-"tests/test_avatar_action_router.py" = ["E501"]
-"tests/test_professional_director.py" = ["E501"]
-"tests/test_director_plan_generator.py" = ["E501"]
-"tests/test_douyin_live_collector.py" = ["E501"]
-"app/providers/domestic_realtime.py" = ["E501"]
