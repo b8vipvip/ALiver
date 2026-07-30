@@ -22,69 +22,65 @@
       button = document.createElement('button');
       button.type = 'button';
       button.dataset.tab = 'simli-tuning';
-      button.textContent = '直播调试';
       const logsButton = tabs.querySelector('[data-tab="logs"]');
       tabs.insertBefore(button, logsButton || null);
       button.addEventListener('click', () => activateTab('simli-tuning', button));
     }
+    button.textContent = '直播调试';
 
     let panel = document.getElementById('tab-simli-tuning');
-    if (!panel) {
-      panel = document.createElement('section');
-      panel.id = 'tab-simli-tuning';
-      panel.className = 'tab-panel live-debug-page';
-      panel.innerHTML = `
-        <header class="page-heading live-debug-heading">
+    if (panel) return panel;
+    panel = document.createElement('section');
+    panel.id = 'tab-simli-tuning';
+    panel.className = 'tab-panel live-debug-page';
+    panel.innerHTML = `
+      <header class="page-heading live-debug-heading">
+        <div>
+          <span class="page-kicker">LIVE DIAGNOSTICS</span>
+          <h2>直播调试中心</h2>
+          <p>集中查看抖音互动采集、窗口捕获、数字人会话、动作、口型、音频链路与自动验证结果，不再挤在导演配置页面。</p>
+        </div>
+        <div class="page-heading-actions">
+          <span id="live-debug-server-version" class="badge warn">服务端检查中</span>
+          <span id="live-debug-bridge-version" class="badge warn">Bridge 检查中</span>
+        </div>
+      </header>
+      <article class="panel live-debug-command-bar">
+        <div class="section-title">
           <div>
-            <span class="page-kicker">LIVE DIAGNOSTICS</span>
-            <h2>直播调试中心</h2>
-            <p>集中查看抖音互动采集、窗口捕获、数字人会话、动作、口型、音频链路与自动验证结果，不再挤在导演配置页面。</p>
+            <h2>一键现场验证</h2>
+            <p class="hint">自动连续检查窗口权限、三级采集、WGC 截图、VTube Studio 模型、动作和口型；单项失败不会中断，结束后统一导出 ZIP。</p>
           </div>
-          <div class="page-heading-actions">
-            <span id="live-debug-server-version" class="badge warn">服务端检查中</span>
-            <span id="live-debug-bridge-version" class="badge warn">Bridge 检查中</span>
+          <div class="actions">
+            <button id="live-debug-full-validation" type="button">一键完整验证并导出</button>
+            <button id="live-debug-refresh-all" type="button" class="secondary">刷新全部状态</button>
           </div>
-        </header>
-        <article class="panel live-debug-command-bar">
-          <div class="section-title">
-            <div>
-              <h2>一键现场验证</h2>
-              <p class="hint">自动连续检查窗口权限、三级采集、WGC 截图、VTube Studio 模型、动作和口型；单项失败不会中断，结束后统一导出 ZIP。</p>
-            </div>
-            <div class="actions">
-              <button id="live-debug-full-validation" type="button">一键完整验证并导出</button>
-              <button id="live-debug-refresh-all" type="button" class="secondary">刷新全部状态</button>
-            </div>
+        </div>
+        <span id="aliver-full-validation" hidden aria-hidden="true"></span>
+        <div id="live-debug-version-warning" class="diagnosis warn">正在读取服务端与 Bridge 版本。</div>
+        <div id="live-debug-validation-placeholder" class="live-debug-validation-placeholder">
+          <p class="hint">点击上方按钮后，这里会显示每项通过/失败状态和诊断包路径。</p>
+        </div>
+      </article>
+      <article class="panel simli-tuning-hero">
+        <div class="section-title">
+          <div>
+            <span class="page-kicker">AVATAR</span>
+            <h2>数字人会话与参数调试</h2>
+            <p class="hint">自动跟随最近活动会话，读取当前模型、动作、热键、口型参数和运行状态。</p>
           </div>
-          <div id="live-debug-version-warning" class="diagnosis warn">正在读取服务端与 Bridge 版本。</div>
-          <div id="live-debug-validation-placeholder" class="live-debug-validation-placeholder">
-            <p class="hint">完整验证模块加载后，本区域会同步显示通过项、失败项和诊断包路径。</p>
-          </div>
-        </article>
-        <article class="panel simli-tuning-hero">
-          <div class="section-title">
-            <div>
-              <span class="page-kicker">AVATAR</span>
-              <h2>数字人会话与参数调试</h2>
-              <p class="hint">自动跟随最近活动会话，读取当前模型、动作、热键、口型参数和运行状态。</p>
-            </div>
-          </div>
-        </article>
-        <div id="live-debug-collector-host" class="live-debug-stack"></div>
-      `;
-      const logsPanel = document.getElementById('tab-logs');
-      logsPanel?.parentElement?.insertBefore(panel, logsPanel);
-    }
-
-    button.textContent = '直播调试';
+        </div>
+      </article>
+      <div id="live-debug-collector-host" class="live-debug-stack"></div>
+    `;
+    const logsPanel = document.getElementById('tab-logs');
+    logsPanel?.parentElement?.insertBefore(panel, logsPanel);
     return panel;
   }
 
   function mergeDirectorWorkspace() {
     const tabs = document.querySelector('.tabs');
-    const autoButton = tabs?.querySelector('[data-tab="auto-director"]');
-    autoButton?.remove();
-
+    tabs?.querySelector('[data-tab="auto-director"]')?.remove();
     const director = document.getElementById('tab-director');
     const auto = document.getElementById('tab-auto-director');
     if (!director || !auto) return;
@@ -107,13 +103,13 @@
       director.prepend(heading);
     }
 
-    const firstDirectorPanel = director.querySelector('.director-intro');
-    if (firstDirectorPanel && !document.getElementById('director-manual-section')) {
+    const firstPanel = director.querySelector('.director-intro');
+    if (firstPanel && !document.getElementById('director-manual-section')) {
       const marker = document.createElement('div');
       marker.id = 'director-manual-section';
       marker.className = 'workspace-section-heading';
       marker.innerHTML = '<span>01</span><div><h3>人工导演与命令队列</h3><p>临时干预、口播提示和命令执行记录。</p></div>';
-      firstDirectorPanel.before(marker);
+      firstPanel.before(marker);
     }
 
     auto.classList.remove('tab-panel');
@@ -132,13 +128,7 @@
     if (!panel || panel.querySelector(':scope > .page-heading')) return;
     const heading = document.createElement('header');
     heading.className = 'page-heading';
-    heading.innerHTML = `
-      <div>
-        <span class="page-kicker">${kicker}</span>
-        <h2>${title}</h2>
-        <p>${description}</p>
-      </div>
-    `;
+    heading.innerHTML = `<div><span class="page-kicker">${kicker}</span><h2>${title}</h2><p>${description}</p></div>`;
     panel.prepend(heading);
   }
 
@@ -157,7 +147,6 @@
       panels[0]?.classList.add('workspace-editor');
       panels[1]?.classList.add('workspace-results');
     }
-
     document.getElementById('provider-list')?.classList.add('structured-list');
     document.getElementById('session-list')?.classList.add('structured-list');
     document.getElementById('bridge-list')?.classList.add('structured-list', 'bridge-card-grid');
@@ -176,51 +165,30 @@
     const host = document.getElementById('live-debug-collector-host');
     const collector = document.getElementById('douyin-live-collector-panel');
     if (host && collector && collector.parentElement !== host) host.appendChild(collector);
-
-    const debugButton = document.querySelector('.tabs [data-tab="simli-tuning"]');
-    if (debugButton && debugButton.textContent !== '直播调试') debugButton.textContent = '直播调试';
-
-    const validationResult = document.querySelector('#douyin-live-collector-panel [data-aliver-validation-results]');
-    const placeholder = document.getElementById('live-debug-validation-placeholder');
-    if (validationResult && placeholder && validationResult.parentElement !== placeholder) {
-      placeholder.replaceChildren(validationResult.cloneNode(true));
-    }
+    const button = document.querySelector('.tabs [data-tab="simli-tuning"]');
+    if (button && button.textContent !== '直播调试') button.textContent = '直播调试';
   }
 
-  function bindLiveDebugActions() {
-    const runButton = document.getElementById('live-debug-full-validation');
-    if (runButton && runButton.dataset.layoutBound !== '1') {
-      runButton.dataset.layoutBound = '1';
-      runButton.addEventListener('click', () => {
-        const target = document.getElementById('aliver-full-validation');
-        if (!target) {
-          toast('完整验证模块仍在加载，请稍等一秒后重试。', true);
-          return;
-        }
-        target.click();
-      });
-    }
-
-    const refreshButton = document.getElementById('live-debug-refresh-all');
-    if (refreshButton && refreshButton.dataset.layoutBound !== '1') {
-      refreshButton.dataset.layoutBound = '1';
-      refreshButton.addEventListener('click', async () => {
-        refreshButton.disabled = true;
-        try {
-          await Promise.all([
-            typeof loadBridges === 'function' ? loadBridges() : Promise.resolve(),
-            typeof loadSessions === 'function' ? loadSessions() : Promise.resolve(),
-          ]);
-          document.getElementById('avatar-debug-refresh')?.click();
-          document.getElementById('douyin-collector-refresh')?.click();
-          toast('直播调试状态已刷新');
-        } catch (error) {
-          toast(error.message, true);
-        } finally {
-          refreshButton.disabled = false;
-        }
-      });
-    }
+  function bindRefresh() {
+    const button = document.getElementById('live-debug-refresh-all');
+    if (!button || button.dataset.layoutBound === '1') return;
+    button.dataset.layoutBound = '1';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await Promise.all([
+          typeof loadBridges === 'function' ? loadBridges() : Promise.resolve(),
+          typeof loadSessions === 'function' ? loadSessions() : Promise.resolve(),
+        ]);
+        document.getElementById('avatar-debug-refresh')?.click();
+        document.getElementById('douyin-collector-refresh')?.click();
+        toast('直播调试状态已刷新');
+      } catch (error) {
+        toast(error.message, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
   }
 
   async function refreshVersionStatus() {
@@ -235,7 +203,7 @@
       serverVersion = String(health?.version || VERSION);
     } catch (_) {}
 
-    const bridge = (state?.bridges || []).find(item => item.connected) || null;
+    const bridge = (state.bridges || []).find(item => item.connected) || null;
     const bridgeVersion = String(bridge?.version || '未连接');
     serverBadge.textContent = `服务端 ${serverVersion}`;
     serverBadge.className = 'badge good';
@@ -246,7 +214,7 @@
       warning.textContent = '没有在线 Windows Bridge。采集、VTube Studio、动作与口型验证暂时不能运行。';
       warning.className = 'diagnosis bad';
     } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
-      warning.textContent = `服务端已更新，但当前在线 Bridge 仍是 ${bridgeVersion}；必须停止旧 Bridge 并启动 ${EXPECTED_BRIDGE_VERSION}，否则仍会看到旧版 WGC 错误。`;
+      warning.textContent = `服务端已更新，但当前在线 Bridge 仍是 ${bridgeVersion}；请停止旧 Bridge 并启动 ${EXPECTED_BRIDGE_VERSION}，否则仍会执行旧版 WGC 代码。`;
       warning.className = 'diagnosis bad';
     } else {
       warning.textContent = `服务端 ${serverVersion} 与 Bridge ${bridgeVersion} 已匹配，可以运行完整验证。`;
@@ -262,28 +230,24 @@
       element.rel = 'stylesheet';
       element.href = url;
       document.head.appendChild(element);
-    } else {
-      element.src = url;
-      element.async = false;
-      document.body.appendChild(element);
+      return;
     }
+    element.src = url;
+    element.async = false;
+    document.body.appendChild(element);
   }
 
   function loadFeatureAssets() {
-    const styles = [
+    for (const [id, url] of [
       ['aliver-console-layout-v2-style', `/static/console_layout_v2.css?v=${VERSION}`],
       ['aliver-avatar-debug-style', `/static/avatar_debug_v2.css?v=${VERSION}`],
       ['aliver-avatar-action-runtime-style', `/static/avatar_action_runtime.css?v=${VERSION}`],
       ['aliver-director-plan-generator-style', `/static/director_plan_generator.css?v=${VERSION}`],
       ['aliver-douyin-live-collector-style', `/static/douyin_live_collector.css?v=${VERSION}`],
       ['aliver-douyin-capture-diagnostics-style', `/static/douyin_capture_diagnostics.css?v=${VERSION}`],
-    ];
-    styles.forEach(([id, url]) => appendAsset('link', id, url));
+    ]) appendAsset('link', id, url);
 
-    const scripts = [
-      ['aliver-local-time-patch', `/static/local_time_patch.js?v=${VERSION}`],
-      ['aliver-diagnostics-zh', `/static/diagnostics_zh.js?v=${VERSION}`],
-      ['aliver-auto-director-refresh-fix', `/static/auto_director_refresh_fix.js?v=${VERSION}`],
+    for (const [id, url] of [
       ['aliver-avatar-debug-v2', `/static/avatar_debug_v2.js?v=${VERSION}`],
       ['aliver-management-v2', `/static/management_v2.js?v=${VERSION}`],
       ['aliver-audio-route-autostart', `/static/audio_route_autostart.js?v=${VERSION}`],
@@ -293,31 +257,27 @@
       ['aliver-director-plan-generator', `/static/director_plan_generator.js?v=${VERSION}`],
       ['aliver-douyin-live-collector', `/static/douyin_live_collector.js?v=${VERSION}`],
       ['aliver-douyin-capture-diagnostics', `/static/douyin_capture_diagnostics.js?v=${VERSION}`],
-      ['aliver-full-validation', `/static/full_validation.js?v=${VERSION}`],
-      ['aliver-provider-catalog-script', `/static/provider_catalog.js?v=${VERSION}`],
-    ];
-    scripts.forEach(([id, url]) => appendAsset('script', id, url));
+    ]) appendAsset('script', id, url);
   }
 
   function start() {
     ensureLiveDebugWorkspace();
     mergeDirectorWorkspace();
     optimizePageLayouts();
-    bindLiveDebugActions();
+    bindRefresh();
     loadFeatureAssets();
     moveDynamicDebugPanels();
     refreshVersionStatus().catch(() => {});
 
     const observer = new MutationObserver(() => {
       moveDynamicDebugPanels();
-      bindLiveDebugActions();
+      bindRefresh();
       optimizePageLayouts();
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
     window.setInterval(() => {
       moveDynamicDebugPanels();
-      bindLiveDebugActions();
       refreshVersionStatus().catch(() => {});
     }, 1500);
   }
