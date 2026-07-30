@@ -127,7 +127,7 @@
       form.querySelector('[name="credentials"]').value = JSON.stringify(row.credentials, null, 2);
       form.querySelector('[name="settings"]').value = JSON.stringify(row.settings, null, 2);
       if (key === 'vtube_studio') {
-        toast('已填入 VTube Studio 本地模板。启动会话后可在数字人调试页一键启用自然动作。');
+        toast('已填入 VTube Studio 本地模板。启动会话后到“直播调试”页配置动作、口型和参数。');
       } else {
         toast(`${row.label}配置模板已填入。当前为 Provider/Bridge 预留适配层，尚未建立厂商 RTC 媒体连接。`);
       }
@@ -140,22 +140,22 @@
     bridgeLabel.firstChild.textContent = 'Bridge（实时/本地数字人供应商必选）';
   }
 
+  const version = '0.14.2';
   const assets = [
-    ['link', 'aliver-avatar-debug-style', '/static/avatar_debug_v2.css?v=0.14.1'],
-    ['link', 'aliver-avatar-action-runtime-style', '/static/avatar_action_runtime.css?v=0.14.1'],
-    ['link', 'aliver-director-plan-generator-style', '/static/director_plan_generator.css?v=0.14.1'],
-    ['link', 'aliver-douyin-live-collector-style', '/static/douyin_live_collector.css?v=0.14.1'],
-    ['link', 'aliver-douyin-capture-diagnostics-style', '/static/douyin_capture_diagnostics.css?v=0.14.1'],
-    ['script', 'aliver-avatar-debug-v2', '/static/avatar_debug_v2.js?v=0.14.1'],
-    ['script', 'aliver-management-v2', '/static/management_v2.js?v=0.14.1'],
-    ['script', 'aliver-audio-route-autostart', '/static/audio_route_autostart.js?v=0.14.1'],
-    ['script', 'aliver-vtube-motion-wizard', '/static/vtube_motion_wizard.js?v=0.14.1'],
-    ['script', 'aliver-vtube-motion-controls-fix', '/static/vtube_motion_controls_fix.js?v=0.14.1'],
-    ['script', 'aliver-avatar-action-runtime', '/static/avatar_action_runtime.js?v=0.14.1'],
-    ['script', 'aliver-director-plan-generator', '/static/director_plan_generator.js?v=0.14.1'],
-    ['script', 'aliver-douyin-live-collector', '/static/douyin_live_collector.js?v=0.14.1'],
-    ['script', 'aliver-douyin-capture-diagnostics', '/static/douyin_capture_diagnostics.js?v=0.14.1'],
-    ['script', 'aliver-full-validation', '/static/full_validation.js?v=0.14.1'],
+    ['link', 'aliver-avatar-debug-style', `/static/avatar_debug_v2.css?v=${version}`],
+    ['link', 'aliver-avatar-action-runtime-style', `/static/avatar_action_runtime.css?v=${version}`],
+    ['link', 'aliver-director-plan-generator-style', `/static/director_plan_generator.css?v=${version}`],
+    ['link', 'aliver-douyin-live-collector-style', `/static/douyin_live_collector.css?v=${version}`],
+    ['link', 'aliver-douyin-capture-diagnostics-style', `/static/douyin_capture_diagnostics.css?v=${version}`],
+    ['script', 'aliver-avatar-debug-v2', `/static/avatar_debug_v2.js?v=${version}`],
+    ['script', 'aliver-management-v2', `/static/management_v2.js?v=${version}`],
+    ['script', 'aliver-audio-route-autostart', `/static/audio_route_autostart.js?v=${version}`],
+    ['script', 'aliver-vtube-motion-wizard', `/static/vtube_motion_wizard.js?v=${version}`],
+    ['script', 'aliver-vtube-motion-controls-fix', `/static/vtube_motion_controls_fix.js?v=${version}`],
+    ['script', 'aliver-avatar-action-runtime', `/static/avatar_action_runtime.js?v=${version}`],
+    ['script', 'aliver-director-plan-generator', `/static/director_plan_generator.js?v=${version}`],
+    ['script', 'aliver-douyin-live-collector', `/static/douyin_live_collector.js?v=${version}`],
+    ['script', 'aliver-douyin-capture-diagnostics', `/static/douyin_capture_diagnostics.js?v=${version}`],
   ];
 
   assets.forEach(([kind, id, href]) => {
@@ -172,6 +172,6 @@
     element.id = id;
     element.src = href;
     element.async = false;
-    document.head.appendChild(element);
+    document.body.appendChild(element);
   });
 })();
