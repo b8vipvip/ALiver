@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -71,7 +72,10 @@ def test_accessibility_denial_creates_waiting_launcher(monkeypatch, tmp_path: Pa
     class AccessDenied(Exception):
         winerror = 5
 
-    monkeypatch.setattr(fix, "_BASE_RESTART_ACCESSIBILITY", lambda _manager: (_ for _ in ()).throw(AccessDenied("拒绝访问")))
+    def denied(_manager):
+        raise AccessDenied("拒绝访问")
+
+    monkeypatch.setattr(fix, "_BASE_RESTART_ACCESSIBILITY", denied)
     monkeypatch.setattr(
         fix.three,
         "_selected_window_process",
@@ -92,7 +96,7 @@ def test_accessibility_denial_creates_waiting_launcher(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(fix, "_launcher_path", lambda: tmp_path / "restart.cmd")
     manager = SimpleNamespace(
         _find_window=lambda: SimpleNamespace(handle=123),
-        _lock=SimpleNamespace(__enter__=lambda self: self, __exit__=lambda self, *args: None),
+        _lock=threading.RLock(),
         _state={},
     )
 
