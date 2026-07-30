@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.10.1"
+version = "0.11.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -59,9 +59,12 @@ ignore = ["B008"]
 "app/avatar_action_service.py" = ["E501"]
 "app/pro_director_service.py" = ["E501"]
 "app/director_plan_service.py" = ["E501"]
+"app/douyin_live_service.py" = ["E501"]
 "app/api/auto_director.py" = ["E501"]
+"app/api/douyin_live.py" = ["E501"]
 "tests/test_vtube_motion_v2.py" = ["E501"]
 "tests/test_avatar_action_router.py" = ["E501"]
 "tests/test_professional_director.py" = ["E501"]
 "tests/test_director_plan_generator.py" = ["E501"]
+"tests/test_douyin_live_collector.py" = ["E501"]
 "app/providers/domestic_realtime.py" = ["E501"]
