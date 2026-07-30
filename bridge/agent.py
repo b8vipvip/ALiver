@@ -19,13 +19,11 @@ import websockets
 try:
     from bridge.audio_capture import AudioCaptureManager
     from bridge.gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
-    from bridge.simli_session import SimliSessionManager
 except ModuleNotFoundError:
     from audio_capture import AudioCaptureManager
     from gpt_in_speech import DEFAULT_TEST_TEXT, play_gpt_in_test_speech
-    from simli_session import SimliSessionManager
 
-BRIDGE_VERSION = "0.4.0"
+BRIDGE_VERSION = "0.8.0"
 BASE_DIR = Path(__file__).resolve().parent
 STATE_FILE = BASE_DIR / "state.json"
 LOCAL_CONFIG = BASE_DIR / "bridge.local.json"
@@ -44,15 +42,11 @@ class BridgeAgent:
         self.state = self.load_state()
         self.processes: dict[str, ManagedProcess] = {}
         self.audio = AudioCaptureManager()
-        self.simli = SimliSessionManager(self.audio)
         self.stop_event = asyncio.Event()
 
     def load_config(self) -> dict[str, Any]:
         if not LOCAL_CONFIG.exists():
-            LOCAL_CONFIG.write_text(
-                EXAMPLE_CONFIG.read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+            LOCAL_CONFIG.write_text(EXAMPLE_CONFIG.read_text(encoding="utf-8"), encoding="utf-8")
             print(f"Created {LOCAL_CONFIG}. Edit process paths if needed.")
         return json.loads(LOCAL_CONFIG.read_text(encoding="utf-8"))
 
@@ -62,10 +56,7 @@ class BridgeAgent:
         return json.loads(STATE_FILE.read_text(encoding="utf-8"))
 
     def save_state(self) -> None:
-        STATE_FILE.write_text(
-            json.dumps(self.state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        STATE_FILE.write_text(json.dumps(self.state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     @property
     def server_url(self) -> str:
@@ -91,7 +82,6 @@ class BridgeAgent:
             "audio.capture.status",
             "audio.capture.stop",
             "provider.liveavatar.placeholder",
-            "provider.simli.realtime",
         ]
 
     async def register(self) -> None:
@@ -136,10 +126,7 @@ class BridgeAgent:
     def ws_url(self) -> str:
         parsed = urlparse(self.server_url)
         scheme = "wss" if parsed.scheme == "https" else "ws"
-        return (
-            f"{scheme}://{parsed.netloc}/ws/bridges/"
-            f"{self.state['bridge_id']}?token={self.state['token']}"
-        )
+        return f"{scheme}://{parsed.netloc}/ws/bridges/{self.state['bridge_id']}?token={self.state['token']}"
 
     def system_info(self) -> dict[str, Any]:
         return {
@@ -149,18 +136,13 @@ class BridgeAgent:
             "pid": os.getpid(),
             "bridge_version": BRIDGE_VERSION,
             "audio_capture": self.audio.status(),
-            "simli_sessions": self.simli.status(),
         }
 
     async def run(self) -> None:
         await self.sync_registration()
         while not self.stop_event.is_set():
             try:
-                async with websockets.connect(
-                    self.ws_url(),
-                    ping_interval=20,
-                    ping_timeout=20,
-                ) as ws:
+                async with websockets.connect(self.ws_url(), ping_interval=20, ping_timeout=20) as ws:
                     print("Bridge connected to ALiver")
                     heartbeat = asyncio.create_task(self.heartbeat_loop(ws))
                     try:
@@ -188,12 +170,7 @@ class BridgeAgent:
         payload = message.get("payload") or {}
         try:
             data = await self.execute(command_type, payload)
-            response = {
-                "type": "result",
-                "command_id": command_id,
-                "ok": True,
-                "data": data,
-            }
+            response = {"type": "result", "command_id": command_id, "ok": True, "data": data}
         except Exception as exc:
             response = {
                 "type": "result",
@@ -274,11 +251,7 @@ class BridgeAgent:
             raise ValueError("Unknown process_id. Add it to bridge.local.json first.")
         current = self.processes.get(process_id)
         if current and current.popen.poll() is None:
-            return {
-                "process_id": process_id,
-                "pid": current.popen.pid,
-                "already_running": True,
-            }
+            return {"process_id": process_id, "pid": current.popen.pid, "already_running": True}
         command = definition.get("command")
         if not isinstance(command, list) or not command:
             raise ValueError("Configured command must be a non-empty list")
@@ -304,16 +277,6 @@ class BridgeAgent:
         session_id = str(payload.get("session_id") or "")
         if not session_id:
             raise ValueError("provider.start_session requires session_id")
-
-        if provider_type == "simli":
-            status = await self.simli.start(session_id, config)
-            return {
-                **status,
-                "external_session_id": session_id,
-                "message": (
-                    "Simli is receiving GPT_OUT audio. Capture the local avatar window in your streaming software."
-                ),
-            }
         if provider_type == "liveavatar":
             return {
                 "status": "awaiting_manual",
@@ -331,10 +294,6 @@ class BridgeAgent:
         raise ValueError(f"Bridge-managed provider not implemented: {provider_type}")
 
     async def stop_provider_session(self, payload: dict[str, Any]) -> dict[str, Any]:
-        provider_type = str(payload.get("provider_type") or "")
-        session_id = str(payload.get("session_id") or "")
-        if provider_type == "simli":
-            return await self.simli.stop(session_id)
         return {"status": "ended", "message": "Bridge session resources released"}
 
 
@@ -349,7 +308,6 @@ async def main() -> None:
     try:
         await agent.run()
     finally:
-        await agent.simli.stop_all()
         await asyncio.to_thread(agent.audio.shutdown)
 
 
