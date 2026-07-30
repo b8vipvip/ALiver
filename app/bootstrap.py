@@ -4,7 +4,7 @@ import uvicorn
 
 import app
 
-SERVER_VERSION = "0.14.0"
+SERVER_VERSION = "0.14.1"
 
 app.__version__ = SERVER_VERSION
 from app import main as app_main  # noqa: E402
@@ -14,7 +14,7 @@ settings = app_main.settings
 # A first-time VTube Studio token request intentionally waits for the user to
 # approve the plugin inside VTube Studio. Keep the server-to-Bridge request
 # alive even when an older .env still contains the previous 30-second value.
-settings.bridge_command_timeout = max(float(settings.bridge_command_timeout), 150.0)
+settings.bridge_command_timeout = max(float(settings.bridge_command_timeout), 240.0)
 
 
 if __name__ == "__main__":
