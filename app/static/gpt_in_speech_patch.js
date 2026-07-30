@@ -32,17 +32,27 @@
 })();
 
 (() => {
-  for (const [src, id] of [
-    ['/static/local_time_patch.js?v=0.14.1', 'aliver-local-time-patch'],
-    ['/static/diagnostics_zh.js?v=0.14.1', 'aliver-diagnostics-zh'],
-    ['/static/provider_catalog.js?v=0.14.1', 'aliver-provider-catalog-script'],
-    ['/static/auto_director_refresh_fix.js?v=0.14.1', 'aliver-auto-director-refresh-fix'],
-  ]) {
+  const version = '0.14.2';
+  const assets = [
+    ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
+    ['/static/live_debug_validation.js', 'aliver-live-debug-validation'],
+    ['/static/local_time_patch.js', 'aliver-local-time-patch'],
+    ['/static/diagnostics_zh.js', 'aliver-diagnostics-zh'],
+    ['/static/provider_catalog.js', 'aliver-provider-catalog-script'],
+    ['/static/auto_director_refresh_fix.js', 'aliver-auto-director-refresh-fix'],
+  ];
+
+  for (const [src, id] of assets) {
     if (document.getElementById(id)) continue;
     const script = document.createElement('script');
     script.id = id;
-    script.src = src;
+    script.src = `${src}?v=${version}`;
     script.async = false;
-    document.head.appendChild(script);
+    script.dataset.aliverVersion = version;
+    script.addEventListener('error', () => {
+      console.error(`ALiver 前端模块加载失败：${script.src}`);
+      if (typeof toast === 'function') toast(`前端模块加载失败：${src}`, true);
+    });
+    document.body.appendChild(script);
   }
 })();
