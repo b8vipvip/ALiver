@@ -28,16 +28,23 @@ ACTIVE_SESSION_STATUSES = {
     "reconnecting",
     "stop_failed",
 }
+RETIRED_PROVIDER_TYPES = {"simli"}
 
 
 @router.get("", response_model=list[ProviderOut])
 def list_providers(db: Session = Depends(get_db)) -> list[ProviderOut]:
-    rows = db.scalars(select(ProviderConfig).order_by(ProviderConfig.created_at.desc())).all()
+    rows = db.scalars(
+        select(ProviderConfig)
+        .where(ProviderConfig.provider_type.not_in(RETIRED_PROVIDER_TYPES))
+        .order_by(ProviderConfig.created_at.desc())
+    ).all()
     return [provider_to_out(row) for row in rows]
 
 
 @router.post("", response_model=ProviderOut, status_code=status.HTTP_201_CREATED)
 def create_provider(payload: ProviderCreate, db: Session = Depends(get_db)) -> ProviderOut:
+    if payload.provider_type in RETIRED_PROVIDER_TYPES:
+        raise HTTPException(status_code=410, detail="Simli 支持已从 ALiver 0.12.0 移除")
     row = ProviderConfig(
         name=payload.name,
         provider_type=payload.provider_type,
@@ -72,6 +79,8 @@ def update_provider(
     row = db.get(ProviderConfig, provider_id)
     if not row:
         raise HTTPException(status_code=404, detail="Provider not found")
+    if row.provider_type in RETIRED_PROVIDER_TYPES:
+        raise HTTPException(status_code=410, detail="该旧 Simli 供应商已停用，请删除历史数据")
     values = payload.model_dump(exclude_unset=True)
     if "name" in values:
         row.name = values["name"]
@@ -110,9 +119,7 @@ def delete_provider(
         raise HTTPException(status_code=404, detail="Provider not found")
 
     sessions = list(
-        db.scalars(
-            select(AvatarSession).where(AvatarSession.provider_config_id == provider_id)
-        ).all()
+        db.scalars(select(AvatarSession).where(AvatarSession.provider_config_id == provider_id)).all()
     )
     active = [session for session in sessions if session.status in ACTIVE_SESSION_STATUSES]
     if active:
@@ -149,6 +156,8 @@ async def test_provider(provider_id: str, db: Session = Depends(get_db)) -> dict
     row = db.get(ProviderConfig, provider_id)
     if not row:
         raise HTTPException(status_code=404, detail="Provider not found")
+    if row.provider_type in RETIRED_PROVIDER_TYPES:
+        raise HTTPException(status_code=410, detail="该旧 Simli 供应商已停用")
     provider = build_provider(row)
     result = await provider.test_connection()
     write_log(
