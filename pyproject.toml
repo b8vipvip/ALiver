@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.12.4"
+version = "0.13.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,34 +38,4 @@ include = ["app*", "bridge*"]
 exclude = ["chrome_extension*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
-
-[tool.ruff]
-line-length = 120
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
-ignore = ["B008"]
-
-[tool.ruff.lint.per-file-ignores]
-"app/main.py" = ["I001"]
-"bridge/audio_capture.py" = ["F841"]
-"bridge/runtime_diagnostics.py" = ["I001"]
-"bridge/douyin_visible_collector.py" = ["E501", "I001"]
-"bridge/douyin_visible_runtime_patch.py" = ["E501"]
-"bridge/vtube_motion_v2.py" = ["E501"]
-"bridge/avatar_action_router.py" = ["E501", "UP035"]
-"bridge/avatar_action_control.py" = ["E501", "I001"]
-"app/avatar_action_service.py" = ["E501"]
-"app/pro_director_service.py" = ["E501"]
-"app/director_plan_service.py" = ["E501"]
-"app/douyin_live_service.py" = ["E501"]
-"app/api/auto_director.py" = ["E501"]
-"app/api/douyin_live.py" = ["E501"]
-"tests/test_vtube_motion_v2.py" = ["E501"]
-"tests/test_avatar_action_router.py" = ["E501"]
-"tests/test_professional_director.py" = ["E501"]
-"tests/test_director_plan_generator.py" = ["E501"]
-"tests/test_douyin_live_collector.py" = ["E501"]
-"app/providers/domestic_realtime.py" = ["E501"]
+asyncio_mode = "auto"
