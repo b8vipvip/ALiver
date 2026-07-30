@@ -1,0 +1,70 @@
+.douyin-capture-title {
+  margin-top: 18px;
+}
+
+.douyin-capture-preview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.douyin-capture-preview-grid figure {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.douyin-capture-preview-grid figcaption {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.douyin-capture-preview-grid img {
+  display: block;
+  width: 100%;
+  max-height: 460px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #090b10;
+}
+
+.douyin-uia-probe-results {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.douyin-probe-row {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.douyin-probe-row small {
+  color: var(--muted);
+}
+
+.douyin-diagnostics-path {
+  display: block;
+  margin-top: 10px;
+  padding: 10px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 960px) {
+  .douyin-capture-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}

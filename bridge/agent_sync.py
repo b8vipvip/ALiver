@@ -13,7 +13,9 @@ from bridge.domestic_provider_scaffolds import (
     stop_domestic_provider,
 )
 from bridge.douyin_ocr_result_patch import install_douyin_ocr_result_patch
+from bridge.douyin_scan_logging_patch import install_douyin_scan_logging_patch
 from bridge.douyin_visible_runtime_patch import install_visible_collector_runtime_patch
+from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -27,7 +29,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.8.3"
+BRIDGE_VERSION = "0.9.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -45,6 +47,8 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
 def install() -> None:
     install_visible_collector_runtime_patch()
     install_douyin_ocr_result_patch()
+    install_douyin_window_capture_patch()
+    install_douyin_scan_logging_patch()
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
