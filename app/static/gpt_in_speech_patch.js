@@ -33,10 +33,10 @@
 
 (() => {
   for (const [src, id] of [
-    ['/static/local_time_patch.js?v=0.14.0', 'aliver-local-time-patch'],
-    ['/static/diagnostics_zh.js?v=0.14.0', 'aliver-diagnostics-zh'],
-    ['/static/provider_catalog.js?v=0.14.0', 'aliver-provider-catalog-script'],
-    ['/static/auto_director_refresh_fix.js?v=0.14.0', 'aliver-auto-director-refresh-fix'],
+    ['/static/local_time_patch.js?v=0.14.1', 'aliver-local-time-patch'],
+    ['/static/diagnostics_zh.js?v=0.14.1', 'aliver-diagnostics-zh'],
+    ['/static/provider_catalog.js?v=0.14.1', 'aliver-provider-catalog-script'],
+    ['/static/auto_director_refresh_fix.js?v=0.14.1', 'aliver-auto-director-refresh-fix'],
   ]) {
     if (document.getElementById(id)) continue;
     const script = document.createElement('script');

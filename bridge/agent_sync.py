@@ -17,8 +17,10 @@ from bridge.douyin_region_occlusion_patch import install_douyin_region_occlusion
 from bridge.douyin_scan_logging_patch import install_douyin_scan_logging_patch
 from bridge.douyin_three_channel_config_patch import install_douyin_three_channel_config_patch
 from bridge.douyin_three_channel_patch import install_douyin_three_channel_patch
+from bridge.douyin_validation_fix import install_douyin_validation_fix
 from bridge.douyin_visible_runtime_patch import install_visible_collector_runtime_patch
 from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
+from bridge.full_validation import run_full_validation
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -32,7 +34,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.10.0"
+BRIDGE_VERSION = "0.10.1"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -54,6 +56,7 @@ def install() -> None:
     install_douyin_region_occlusion_patch()
     install_douyin_three_channel_patch()
     install_douyin_three_channel_config_patch()
+    install_douyin_validation_fix()
     install_douyin_scan_logging_patch()
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
@@ -76,6 +79,8 @@ def install() -> None:
             "douyin.visible.electron_accessibility",
             "douyin.visible.windows_graphics_capture",
             "douyin.visible.channel_probe",
+            "aliver.full_validation",
+            "provider.avatar.full_validation",
         ):
             if item not in values:
                 values.append(item)
@@ -112,6 +117,8 @@ def install() -> None:
                 )
             elif command_type == "douyin.visible.electron_accessibility.restart":
                 result = await asyncio.to_thread(self.douyin_collector.restart_electron_accessibility)
+            elif command_type in {"aliver.full_validation", "provider.avatar.full_validation"}:
+                result = await run_full_validation(self, dict(payload or {}))
             else:
                 result = await original_execute(self, command_type, payload)
             event(

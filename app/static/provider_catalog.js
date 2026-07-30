@@ -141,20 +141,21 @@
   }
 
   const assets = [
-    ['link', 'aliver-avatar-debug-style', '/static/avatar_debug_v2.css?v=0.9.9'],
-    ['link', 'aliver-avatar-action-runtime-style', '/static/avatar_action_runtime.css?v=0.9.9'],
-    ['link', 'aliver-director-plan-generator-style', '/static/director_plan_generator.css?v=0.10.1'],
-    ['link', 'aliver-douyin-live-collector-style', '/static/douyin_live_collector.css?v=0.14.0'],
-    ['link', 'aliver-douyin-capture-diagnostics-style', '/static/douyin_capture_diagnostics.css?v=0.14.0'],
-    ['script', 'aliver-avatar-debug-v2', '/static/avatar_debug_v2.js?v=0.9.9'],
-    ['script', 'aliver-management-v2', '/static/management_v2.js?v=0.9.9'],
-    ['script', 'aliver-audio-route-autostart', '/static/audio_route_autostart.js?v=0.9.9'],
-    ['script', 'aliver-vtube-motion-wizard', '/static/vtube_motion_wizard.js?v=0.9.9'],
-    ['script', 'aliver-vtube-motion-controls-fix', '/static/vtube_motion_controls_fix.js?v=0.9.9'],
-    ['script', 'aliver-avatar-action-runtime', '/static/avatar_action_runtime.js?v=0.9.9'],
-    ['script', 'aliver-director-plan-generator', '/static/director_plan_generator.js?v=0.10.1'],
-    ['script', 'aliver-douyin-live-collector', '/static/douyin_live_collector.js?v=0.14.0'],
-    ['script', 'aliver-douyin-capture-diagnostics', '/static/douyin_capture_diagnostics.js?v=0.14.0'],
+    ['link', 'aliver-avatar-debug-style', '/static/avatar_debug_v2.css?v=0.14.1'],
+    ['link', 'aliver-avatar-action-runtime-style', '/static/avatar_action_runtime.css?v=0.14.1'],
+    ['link', 'aliver-director-plan-generator-style', '/static/director_plan_generator.css?v=0.14.1'],
+    ['link', 'aliver-douyin-live-collector-style', '/static/douyin_live_collector.css?v=0.14.1'],
+    ['link', 'aliver-douyin-capture-diagnostics-style', '/static/douyin_capture_diagnostics.css?v=0.14.1'],
+    ['script', 'aliver-avatar-debug-v2', '/static/avatar_debug_v2.js?v=0.14.1'],
+    ['script', 'aliver-management-v2', '/static/management_v2.js?v=0.14.1'],
+    ['script', 'aliver-audio-route-autostart', '/static/audio_route_autostart.js?v=0.14.1'],
+    ['script', 'aliver-vtube-motion-wizard', '/static/vtube_motion_wizard.js?v=0.14.1'],
+    ['script', 'aliver-vtube-motion-controls-fix', '/static/vtube_motion_controls_fix.js?v=0.14.1'],
+    ['script', 'aliver-avatar-action-runtime', '/static/avatar_action_runtime.js?v=0.14.1'],
+    ['script', 'aliver-director-plan-generator', '/static/director_plan_generator.js?v=0.14.1'],
+    ['script', 'aliver-douyin-live-collector', '/static/douyin_live_collector.js?v=0.14.1'],
+    ['script', 'aliver-douyin-capture-diagnostics', '/static/douyin_capture_diagnostics.js?v=0.14.1'],
+    ['script', 'aliver-full-validation', '/static/full_validation.js?v=0.14.1'],
   ];
 
   assets.forEach(([kind, id, href]) => {
