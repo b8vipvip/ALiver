@@ -29,6 +29,8 @@ jobs:
       - run: node --check app/static/douyin_live_collector.js
       - run: node --check app/static/douyin_capture_diagnostics.js
       - run: node --check app/static/full_validation.js
+      - run: node --check app/static/console_layout_v2.js
+      - run: node --check app/static/live_debug_validation.js
       - run: node --check app/static/gpt_in_speech_patch.js
       - run: node --check app/static/local_time_patch.js
       - run: node --check app/static/provider_catalog.js
