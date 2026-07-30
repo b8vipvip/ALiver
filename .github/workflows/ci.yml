@@ -24,6 +24,7 @@ jobs:
       - run: node --check chrome_extension/content.js
       - run: node --check chrome_extension/popup.js
       - run: node --check app/static/auto_director.js
+      - run: node --check app/static/director_plan_generator.js
       - run: node --check app/static/gpt_in_speech_patch.js
       - run: node --check app/static/simli_tuning.js
       - run: node --check app/static/simli_link_diagnostics.js
