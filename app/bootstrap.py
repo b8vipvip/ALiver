@@ -4,7 +4,7 @@ import uvicorn
 
 import app
 
-SERVER_VERSION = "0.12.3"
+SERVER_VERSION = "0.12.4"
 
 app.__version__ = SERVER_VERSION
 from app import main as app_main  # noqa: E402
