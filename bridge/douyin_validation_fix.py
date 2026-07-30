@@ -174,5 +174,6 @@ def install_douyin_validation_fix() -> None:
     three._frame_to_rgb = _frame_to_rgb
     three._session_for_window = _session_for_window
     three.restart_electron_accessibility = restart_electron_accessibility
+    manager._selected_window_process = three._selected_window_process
     manager.restart_electron_accessibility = restart_electron_accessibility
     manager._aliver_validation_fix_v1 = True
