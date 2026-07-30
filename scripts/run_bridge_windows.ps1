@@ -29,12 +29,33 @@ $consoleLog = Join-Path $logDir "bridge-console-$stamp.log"
 
 $env:PYTHONUNBUFFERED = "1"
 $env:PYTHONFAULTHANDLER = "1"
+$env:PYTHONIOENCODING = "utf-8"
 $env:OPENCV_OPENCL_RUNTIME = "disabled"
 $env:OMP_NUM_THREADS = "1"
 
 Write-Host "Bridge 控制台日志：$consoleLog"
-& $pythonExe -X faulthandler -u -m bridge.agent_sync *>&1 | Tee-Object -FilePath $consoleLog
-$exitCode = $LASTEXITCODE
+
+# Windows PowerShell 5.1 wraps every native-process stderr line as an
+# ErrorRecord. RapidOCR writes normal INFO startup messages to stderr, so the
+# script-wide ErrorActionPreference=Stop used to terminate Bridge even though
+# Python had not failed. Keep strict handling for the rest of the launcher, but
+# treat native stderr as ordinary console text and use Python's real exit code.
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = "Continue"
+    & $pythonExe -X faulthandler -u -m bridge.agent_sync 2>&1 |
+        ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                $_.Exception.Message
+            } else {
+                $_
+            }
+        } |
+        Tee-Object -FilePath $consoleLog
+    $exitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
 
 if ($null -eq $exitCode) {
     $exitCode = 1
