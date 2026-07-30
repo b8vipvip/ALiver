@@ -52,9 +52,17 @@
   color: var(--muted);
 }
 
+.douyin-diagnostics-location {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .douyin-diagnostics-path {
   display: block;
-  margin-top: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 10px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -63,8 +71,18 @@
   background: rgba(0, 0, 0, 0.18);
 }
 
+.douyin-diagnostics-location button {
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
 @media (max-width: 960px) {
   .douyin-capture-preview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .douyin-diagnostics-location {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
