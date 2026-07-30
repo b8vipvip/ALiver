@@ -33,8 +33,9 @@
 
 (() => {
   for (const [src, id] of [
-    ['/static/diagnostics_zh.js?v=0.12.0', 'aliver-diagnostics-zh'],
-    ['/static/provider_catalog.js?v=0.12.0', 'aliver-provider-catalog-script'],
+    ['/static/diagnostics_zh.js?v=0.12.1', 'aliver-diagnostics-zh'],
+    ['/static/provider_catalog.js?v=0.12.1', 'aliver-provider-catalog-script'],
+    ['/static/auto_director_refresh_fix.js?v=0.12.1', 'aliver-auto-director-refresh-fix'],
   ]) {
     if (document.getElementById(id)) continue;
     const script = document.createElement('script');
