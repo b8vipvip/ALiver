@@ -1,4 +1,4 @@
-from bridge.douyin_visible_runtime_patch import candidate_score
+from bridge.douyin_visible_runtime_patch import _parse_preferred_hwnd, candidate_score
 
 
 def test_process_match_finds_live_companion_without_title():
@@ -52,3 +52,9 @@ def test_exact_title_still_works_when_process_path_is_unavailable():
     )
     assert score is not None
     assert score >= 200
+
+
+def test_preferred_hwnd_accepts_power_shell_hex_format():
+    assert _parse_preferred_hwnd("0x10788") == 0x10788
+    assert _parse_preferred_hwnd(0x10788) == 0x10788
+    assert _parse_preferred_hwnd("") is None
