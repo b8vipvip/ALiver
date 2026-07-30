@@ -26,7 +26,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.8.0"
+BRIDGE_VERSION = "0.8.1"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
