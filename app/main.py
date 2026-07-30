@@ -12,7 +12,18 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import avatar_actions, auto_director, bridges, dashboard, director, health, logs, providers, sessions
+from app.api import (
+    avatar_actions,
+    auto_director,
+    bridges,
+    dashboard,
+    director,
+    douyin_live,
+    health,
+    logs,
+    providers,
+    sessions,
+)
 from app.auto_director_service import auto_director_worker
 from app.avatar_action_service import schedule_chatgpt_status
 from app.bridge_hub import bridge_hub
@@ -76,6 +87,7 @@ app.include_router(avatar_actions.router)
 app.include_router(bridges.router)
 app.include_router(director.router)
 app.include_router(auto_director.router)
+app.include_router(douyin_live.router)
 app.include_router(logs.router)
 app.include_router(dashboard.router)
 
