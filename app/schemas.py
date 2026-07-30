@@ -216,11 +216,57 @@ class AutoDirectorProcessOut(BaseModel):
     reason: str
 
 
+class ProfessionalDirectorRunAction(BaseModel):
+    extension_id: str
+    action: str = Field(
+        pattern="^(start|pause|resume|next_segment|close|stop|emergency_stop|reset)$"
+    )
+
+
+class ProfessionalDirectorRunOut(BaseModel):
+    id: str
+    config_id: str
+    status: str
+    phase: str
+    current_segment_index: int
+    current_segment: dict[str, Any] | None
+    next_segment: dict[str, Any] | None
+    rundown: list[dict[str, Any]]
+    state: dict[str, Any]
+    elapsed_seconds: int
+    segment_elapsed_seconds: int
+    started_at: datetime | None
+    paused_at: datetime | None
+    ended_at: datetime | None
+    current_segment_started_at: datetime | None
+    last_decision_at: datetime | None
+    next_cue_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DirectorDecisionOut(BaseModel):
+    id: str
+    config_id: str
+    run_id: str | None
+    event_id: str | None
+    command_id: str | None
+    decision_type: str
+    instruction: str
+    avatar_action: str | None
+    priority: int
+    reason: str
+    context: dict[str, Any]
+    result: dict[str, Any]
+    created_at: datetime
+
+
 class AutoDirectorStatusOut(BaseModel):
     extension_id: str
     configured: bool
     enabled: bool
     mode: str
+    professional_mode: bool = False
     extension_connected: bool
     chatgpt_open: bool
     composer_ready: bool
@@ -231,6 +277,8 @@ class AutoDirectorStatusOut(BaseModel):
     pending_commands: int
     last_dispatched_at: datetime | None
     last_event_at: datetime | None
+    run: dict[str, Any] | None = None
+    last_decision: dict[str, Any] | None = None
 
 
 class LogOut(BaseModel):

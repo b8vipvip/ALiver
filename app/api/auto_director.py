@@ -20,7 +20,21 @@ from app.db import get_db
 from app.extension_hub import extension_hub
 from app.json_utils import dumps, loads
 from app.log_service import write_log
-from app.models import AudienceEvent, AutoDirectorConfig, BrowserExtension, DirectorCommand
+from app.models import (
+    AudienceEvent,
+    AutoDirectorConfig,
+    AutoDirectorRun,
+    BrowserExtension,
+    DirectorCommand,
+    DirectorDecision,
+)
+from app.pro_director_service import (
+    control_run,
+    decision_to_dict,
+    get_or_create_run,
+    professional_settings,
+    run_to_dict,
+)
 from app.schemas import (
     AudienceEventCreate,
     AudienceEventOut,
@@ -28,6 +42,9 @@ from app.schemas import (
     AutoDirectorConfigUpsert,
     AutoDirectorProcessOut,
     AutoDirectorStatusOut,
+    DirectorDecisionOut,
+    ProfessionalDirectorRunAction,
+    ProfessionalDirectorRunOut,
 )
 from app.security import decrypt_json, encrypt_json
 
@@ -42,6 +59,13 @@ def get_config(db: Session, extension_id: str) -> AutoDirectorConfig | None:
     return db.scalar(
         select(AutoDirectorConfig).where(AutoDirectorConfig.extension_id == extension_id)
     )
+
+
+def require_config(db: Session, extension_id: str) -> AutoDirectorConfig:
+    row = get_config(db, extension_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Auto director config not found")
+    return row
 
 
 def require_extension(db: Session, extension_id: str) -> BrowserExtension:
@@ -82,13 +106,80 @@ def upsert_config(
         row.credentials_encrypted = encrypt_json(credentials)
     db.commit()
     db.refresh(row)
+
+    settings = merged_settings(row)
+    run = get_or_create_run(db, row, settings)
+    if run.status in {"stopped", "paused"}:
+        run.rundown_json = dumps(professional_settings(settings)["rundown"])
+        db.commit()
+
     write_log(
         db,
         category="auto_director.config.updated",
         message=f"Updated auto director config for extension {payload.extension_id}",
-        details={"config_id": row.id, "enabled": row.enabled, "mode": row.mode},
+        details={
+            "config_id": row.id,
+            "enabled": row.enabled,
+            "mode": row.mode,
+            "professional_mode": bool(settings.get("professional_mode", True)),
+        },
     )
     return AutoDirectorConfigOut(**config_to_dict(row, payload.extension_id))
+
+
+@router.get("/run", response_model=ProfessionalDirectorRunOut)
+def read_run(
+    extension_id: str = Query(...),
+    db: Session = Depends(get_db),
+) -> ProfessionalDirectorRunOut:
+    config = require_config(db, extension_id)
+    settings = merged_settings(config)
+    row = get_or_create_run(db, config, settings)
+    return ProfessionalDirectorRunOut(**run_to_dict(row, settings))
+
+
+@router.post("/run/control", response_model=ProfessionalDirectorRunOut)
+def control_professional_run(
+    payload: ProfessionalDirectorRunAction,
+    db: Session = Depends(get_db),
+) -> ProfessionalDirectorRunOut:
+    config = require_config(db, payload.extension_id)
+    settings = merged_settings(config)
+    try:
+        row = control_run(db, config, settings, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    write_log(
+        db,
+        category="professional_director.run.control",
+        message=f"Professional director run action: {payload.action}",
+        details={
+            "config_id": config.id,
+            "run_id": row.id,
+            "action": payload.action,
+            "status": row.status,
+            "phase": row.phase,
+        },
+    )
+    return ProfessionalDirectorRunOut(**run_to_dict(row, settings))
+
+
+@router.get("/decisions", response_model=list[DirectorDecisionOut])
+def list_decisions(
+    extension_id: str = Query(...),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> list[DirectorDecisionOut]:
+    config = get_config(db, extension_id)
+    if not config:
+        return []
+    rows = db.scalars(
+        select(DirectorDecision)
+        .where(DirectorDecision.config_id == config.id)
+        .order_by(DirectorDecision.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [DirectorDecisionOut(**decision_to_dict(row)) for row in rows]
 
 
 @router.post("/events", response_model=AudienceEventOut, status_code=201)
@@ -207,6 +298,21 @@ def retry_event(event_id: str, db: Session = Depends(get_db)) -> AudienceEventOu
     return AudienceEventOut(**event_to_dict(row))
 
 
+@router.post("/events/{event_id}/dismiss", response_model=AudienceEventOut)
+def dismiss_event(event_id: str, db: Session = Depends(get_db)) -> AudienceEventOut:
+    row = db.get(AudienceEvent, event_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Audience event not found")
+    if row.status == "selected":
+        raise HTTPException(status_code=409, detail="已生成导演命令的事件不能直接忽略")
+    row.status = "ignored"
+    row.reason = "人工导演忽略"
+    row.processed_at = utcnow()
+    db.commit()
+    db.refresh(row)
+    return AudienceEventOut(**event_to_dict(row))
+
+
 @router.post("/process", response_model=AutoDirectorProcessOut)
 async def process_once(
     extension_id: str = Query(...),
@@ -230,6 +336,9 @@ def read_status(
     metadata = loads(extension.metadata_json, {})
     counts = {"queued": 0, "selected": 0, "ignored": 0}
     pending_commands = 0
+    settings = merged_settings(config)
+    run_data = None
+    last_decision = None
     if config:
         rows = db.execute(
             select(AudienceEvent.status, func.count(AudienceEvent.id))
@@ -246,11 +355,23 @@ def read_status(
             )
             or 0
         )
+        run = db.scalar(select(AutoDirectorRun).where(AutoDirectorRun.config_id == config.id))
+        if run:
+            run_data = run_to_dict(run, settings)
+        decision = db.scalar(
+            select(DirectorDecision)
+            .where(DirectorDecision.config_id == config.id)
+            .order_by(DirectorDecision.created_at.desc())
+            .limit(1)
+        )
+        if decision:
+            last_decision = decision_to_dict(decision)
     return AutoDirectorStatusOut(
         extension_id=extension_id,
         configured=bool(config),
         enabled=bool(config and config.enabled),
         mode=config.mode if config else "rules",
+        professional_mode=bool(settings.get("professional_mode", True)),
         extension_connected=extension_hub.is_connected(extension_id),
         chatgpt_open=bool(metadata.get("chatgpt_open")),
         composer_ready=bool(metadata.get("composer_ready")),
@@ -261,4 +382,6 @@ def read_status(
         pending_commands=pending_commands,
         last_dispatched_at=config.last_dispatched_at if config else None,
         last_event_at=config.last_event_at if config else None,
+        run=run_data,
+        last_decision=last_decision,
     )
