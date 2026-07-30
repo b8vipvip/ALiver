@@ -143,12 +143,14 @@
   const assets = [
     ['link', 'aliver-avatar-debug-style', '/static/avatar_debug_v2.css?v=0.9.9'],
     ['link', 'aliver-avatar-action-runtime-style', '/static/avatar_action_runtime.css?v=0.9.9'],
+    ['link', 'aliver-director-plan-generator-style', '/static/director_plan_generator.css?v=0.10.1'],
     ['script', 'aliver-avatar-debug-v2', '/static/avatar_debug_v2.js?v=0.9.9'],
     ['script', 'aliver-management-v2', '/static/management_v2.js?v=0.9.9'],
     ['script', 'aliver-audio-route-autostart', '/static/audio_route_autostart.js?v=0.9.9'],
     ['script', 'aliver-vtube-motion-wizard', '/static/vtube_motion_wizard.js?v=0.9.9'],
     ['script', 'aliver-vtube-motion-controls-fix', '/static/vtube_motion_controls_fix.js?v=0.9.9'],
     ['script', 'aliver-avatar-action-runtime', '/static/avatar_action_runtime.js?v=0.9.9'],
+    ['script', 'aliver-director-plan-generator', '/static/director_plan_generator.js?v=0.10.1'],
   ];
 
   assets.forEach(([kind, id, href]) => {
