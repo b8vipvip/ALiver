@@ -47,8 +47,8 @@ def test_capture_target_window_prefers_window_surface_and_crops(monkeypatch):
     assert source == "printwindow"
     assert screen_called is False
     assert image.shape == (100, 200, 3)
-    assert crop.shape == (40, 50, 3)
-    assert pixels == (100, 20, 50, 40)
+    assert crop.shape == (80, 50, 3)
+    assert pixels == (100, 20, 50, 80)
     assert manager._state["capture_safety"] == "window_surface"
 
 
