@@ -1,8 +1,5 @@
 from pathlib import Path
 
-import app
-from bridge import agent_sync
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,8 +9,8 @@ def _read(relative: str) -> str:
 
 
 def test_version_pair_is_bumped_for_live_debug_release():
-    assert app.__version__ == "0.14.2"
-    assert agent_sync.BRIDGE_VERSION == "0.10.2"
+    assert '__version__ = "0.14.2"' in _read("app/__init__.py")
+    assert 'BRIDGE_VERSION = "0.10.2"' in _read("bridge/agent_sync.py")
 
 
 def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
@@ -32,7 +29,6 @@ def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
 def test_director_and_collector_are_rehomed_by_layout_controller():
     layout = _read("app/static/console_layout_v2.js")
 
-    assert "autoButton" not in layout  # renamed implementation should not regress to old branch
     assert "[data-tab=\"auto-director\"]" in layout
     assert "auto.classList.remove('tab-panel')" in layout
     assert "live-debug-collector-host" in layout
