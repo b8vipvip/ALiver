@@ -143,6 +143,50 @@ class AudienceEvent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class AutoDirectorRun(Base):
+    __tablename__ = "auto_director_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    config_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("auto_director_configs.id"), unique=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), default="stopped", index=True)
+    phase: Mapped[str] = mapped_column(String(40), default="standby", index=True)
+    current_segment_index: Mapped[int] = mapped_column(Integer, default=0)
+    rundown_json: Mapped[str] = mapped_column(Text, default="[]")
+    state_json: Mapped[str] = mapped_column(Text, default="{}")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_segment_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_cue_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class DirectorDecision(Base):
+    __tablename__ = "director_decisions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    config_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("auto_director_configs.id"), index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("auto_director_runs.id"), nullable=True, index=True
+    )
+    event_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    command_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    decision_type: Mapped[str] = mapped_column(String(40), default="hold", index=True)
+    instruction: Mapped[str] = mapped_column(Text, default="")
+    avatar_action: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, default=50)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    context_json: Mapped[str] = mapped_column(Text, default="{}")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class EventLog(Base):
     __tablename__ = "event_logs"
 
