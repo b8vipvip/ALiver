@@ -7,6 +7,9 @@ from typing import Any
 from app import pro_director_service
 
 _original_base_context = pro_director_service._base_context
+_original_ai_director_decision = pro_director_service.ai_director_decision
+_original_apply_decision_state = pro_director_service.apply_decision_state
+_original_control_run = pro_director_service.control_run
 
 
 def _json_default(value: Any) -> str:
@@ -21,4 +24,76 @@ def safe_base_context(*args: Any, **kwargs: Any) -> dict[str, Any]:
     return json.loads(json.dumps(context, ensure_ascii=False, default=_json_default))
 
 
+def _closing_hold(reason: str = "收尾口播已经发送，保持关闭状态，不再重复下发") -> dict[str, Any]:
+    return {
+        "decision_type": "hold",
+        "event_id": None,
+        "instruction": "",
+        "avatar_action": None,
+        "priority": 0,
+        "duration_seconds": 0,
+        "reason": reason,
+        "topic": None,
+        "next_cue_seconds": 600,
+    }
+
+
+async def guarded_ai_director_decision(
+    config: Any,
+    run: Any,
+    settings: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Treat a dispatched closing instruction as a one-shot terminal cue."""
+    if bool(pro_director_service.run_state(run).get("closing_sent")):
+        return _closing_hold()
+    return await _original_ai_director_decision(config, run, settings, candidates)
+
+
+def guarded_apply_decision_state(
+    run: Any,
+    settings: dict[str, Any],
+    decision: dict[str, Any],
+    event: Any,
+) -> None:
+    """Move a close decision into a stable closing state with no future cue timer."""
+    _original_apply_decision_state(run, settings, decision, event)
+    if str(decision.get("decision_type") or "hold") != "close":
+        return
+
+    rundown = pro_director_service.current_rundown(run, settings)
+    closing_index = next(
+        (index for index, item in enumerate(rundown) if str(item.get("id")) == "closing"),
+        max(0, len(rundown) - 1),
+    )
+    run.status = "closing"
+    run.phase = "closing"
+    run.current_segment_index = closing_index
+    run.current_segment_started_at = pro_director_service.utcnow()
+    run.next_cue_at = None
+
+    state = pro_director_service.run_state(run)
+    state["closing_sent"] = True
+    state["last_reason"] = str(decision.get("reason") or "收尾口播已经发送")
+    run.state_json = pro_director_service.dumps(state)
+
+
+def guarded_control_run(db: Any, config: Any, settings: dict[str, Any], action: str) -> Any:
+    """Make repeated clicks on '进入收尾' idempotent after the closing cue was sent."""
+    if str(action or "").strip().lower() == "close":
+        run = pro_director_service.get_or_create_run(db, config, settings)
+        state = pro_director_service.run_state(run)
+        if run.status == "closing" and bool(state.get("closing_sent")):
+            state["last_reason"] = "收尾口播已经发送，保持关闭状态，不重复下发"
+            run.state_json = pro_director_service.dumps(state)
+            run.next_cue_at = None
+            db.commit()
+            db.refresh(run)
+            return run
+    return _original_control_run(db, config, settings, action)
+
+
 pro_director_service._base_context = safe_base_context
+pro_director_service.ai_director_decision = guarded_ai_director_decision
+pro_director_service.apply_decision_state = guarded_apply_decision_state
+pro_director_service.control_run = guarded_control_run

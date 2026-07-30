@@ -24,6 +24,7 @@ jobs:
       - run: node --check chrome_extension/content.js
       - run: node --check chrome_extension/popup.js
       - run: node --check app/static/auto_director.js
+      - run: node --check app/static/auto_director_refresh_fix.js
       - run: node --check app/static/director_plan_generator.js
       - run: node --check app/static/douyin_live_collector.js
       - run: node --check app/static/gpt_in_speech_patch.js
