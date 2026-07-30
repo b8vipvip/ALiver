@@ -44,6 +44,11 @@
   font-size: 1.35rem;
 }
 
+.douyin-collector-metrics .bad-text {
+  color: #ff7f8f;
+  overflow-wrap: anywhere;
+}
+
 .douyin-collector-recent {
   display: grid;
   gap: 8px;

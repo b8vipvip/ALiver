@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.13.1"
+version = "0.14.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,6 +24,7 @@ dependencies = [
   "rapidocr>=3.8,<4; sys_platform == 'win32'",
   "onnxruntime>=1.20,<2; sys_platform == 'win32'",
   "pillow>=10,<13; sys_platform == 'win32'",
+  "windows-capture>=2.0,<3; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +56,7 @@ ignore = ["B008"]
 "bridge/douyin_visible_collector.py" = ["E501", "I001"]
 "bridge/douyin_visible_runtime_patch.py" = ["E501"]
 "bridge/douyin_window_capture_patch.py" = ["E501", "I001", "F401"]
+"bridge/douyin_three_channel_patch.py" = ["E501", "I001"]
 "bridge/vtube_motion_v2.py" = ["E501"]
 "bridge/avatar_action_router.py" = ["E501", "UP035"]
 "bridge/avatar_action_control.py" = ["E501", "I001"]

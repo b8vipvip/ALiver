@@ -15,6 +15,8 @@ from bridge.domestic_provider_scaffolds import (
 from bridge.douyin_ocr_result_patch import install_douyin_ocr_result_patch
 from bridge.douyin_region_occlusion_patch import install_douyin_region_occlusion_patch
 from bridge.douyin_scan_logging_patch import install_douyin_scan_logging_patch
+from bridge.douyin_three_channel_config_patch import install_douyin_three_channel_config_patch
+from bridge.douyin_three_channel_patch import install_douyin_three_channel_patch
 from bridge.douyin_visible_runtime_patch import install_visible_collector_runtime_patch
 from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
 from bridge.runtime_diagnostics import (
@@ -30,7 +32,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.9.1"
+BRIDGE_VERSION = "0.10.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -50,6 +52,8 @@ def install() -> None:
     install_douyin_ocr_result_patch()
     install_douyin_window_capture_patch()
     install_douyin_region_occlusion_patch()
+    install_douyin_three_channel_patch()
+    install_douyin_three_channel_config_patch()
     install_douyin_scan_logging_patch()
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
@@ -68,6 +72,10 @@ def install() -> None:
             "bridge.diagnostics.bundle",
             "douyin.visible.region_occlusion_guard",
             "douyin.visible.open_diagnostics_folder",
+            "douyin.visible.three_channel",
+            "douyin.visible.electron_accessibility",
+            "douyin.visible.windows_graphics_capture",
+            "douyin.visible.channel_probe",
         ):
             if item not in values:
                 values.append(item)
@@ -95,6 +103,15 @@ def install() -> None:
                     self.douyin_collector.open_diagnostics_folder,
                     str(payload.get("path") or "").strip() or None,
                 )
+            elif command_type == "douyin.visible.channel_probe":
+                result = await asyncio.to_thread(self.douyin_collector.probe_channels)
+            elif command_type == "douyin.visible.electron_accessibility.status":
+                result = await asyncio.to_thread(
+                    self.douyin_collector.electron_accessibility_status,
+                    refresh=True,
+                )
+            elif command_type == "douyin.visible.electron_accessibility.restart":
+                result = await asyncio.to_thread(self.douyin_collector.restart_electron_accessibility)
             else:
                 result = await original_execute(self, command_type, payload)
             event(
