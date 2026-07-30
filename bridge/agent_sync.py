@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from pathlib import Path
 from typing import Any
 
-# Disable OpenCV acceleration paths that have caused native crashes on some Windows drivers.
-os.environ.setdefault("OPENCV_OPENCL_RUNTIME", "disabled")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-
-from bridge import agent, simli_session
+from bridge import agent
 from bridge.control_channel import install_bridge_control_guard
 from bridge.domestic_provider_scaffolds import (
     DOMESTIC_PROVIDER_TYPES,
@@ -28,97 +23,24 @@ from bridge.runtime_diagnostics import (
     redact,
     start_runtime_logging,
 )
-from bridge.simli_control_stability import fast_manager_tuning_status
-from bridge.simli_crash_guard import install_simli_crash_guard, install_simli_runtime_guard
-from bridge.simli_diagnostics import (
-    find_runtime,
-    install_simli_diagnostics_patch,
-    manager_diagnostic_report,
-    run_manager_diagnostic,
-)
-from bridge.simli_link_diagnostics import install_link_diagnostics
-from bridge.simli_link_diagnostics_v2 import (
-    install_link_diagnostics_v2,
-    manager_begin_link_test,
-    manager_link_report,
-    manager_link_status,
-)
-from bridge.simli_link_runtime import install_link_runtime_timestamps
-from bridge.simli_network_policy import install_simli_network_policy
-from bridge.simli_realtime_fix import install_simli_realtime_fix
-from bridge.simli_realtime_v2 import install_simli_realtime_v2
-from bridge.simli_sync import SimliSynchronizedRenderer, install_simli_sync_patch
-from bridge.simli_sync_compat import install_audio_iterator_compat
-from bridge.simli_tuning import (
-    install_simli_tuning_patch,
-    manager_apply_tuning,
-    manager_reset_tuning,
-    manager_run_tuning_test,
-)
-from bridge.simli_waveout import install_simli_waveout_patch
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.7.1"
+BRIDGE_VERSION = "0.8.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
 
-def _attach_recent_events(manager, session_id, report):
-    runtime = find_runtime(manager, session_id)
-    renderer = getattr(runtime, "renderer", None)
-    report = dict(report)
-    report["recent_events"] = list(getattr(renderer, "_diag_events", []))[-30:]
-    report["bridge_runtime_logs"] = current_paths()
-    return report
-
-
 def _session_summary(agent_instance: Any) -> dict[str, Any]:
-    sessions = getattr(getattr(agent_instance, "simli", None), "sessions", {})
+    vtube = getattr(agent_instance, "vtube_studio", None)
+    collector = getattr(agent_instance, "douyin_collector", None)
     return {
         "bridge_connected": not agent_instance.stop_event.is_set(),
-        "simli_sessions": {
-            session_id: {
-                "status": runtime.state.get("status"),
-                "phase": runtime.state.get("phase"),
-                "phase_zh": runtime.state.get("phase_zh"),
-                "sent_chunks": runtime.state.get("sent_chunks"),
-                "last_input_dbfs": runtime.state.get("last_input_dbfs"),
-                "network_policy": runtime.state.get("network_policy"),
-                "last_idle_trim": runtime.state.get("last_idle_trim"),
-                "renderer_task_done": bool(runtime.renderer_task and runtime.renderer_task.done()),
-                "sender_task_done": bool(runtime.sender_task and runtime.sender_task.done()),
-                "capture_thread_alive": bool(runtime.capture_thread and runtime.capture_thread.is_alive()),
-                "link_diagnostics": (
-                    getattr(runtime, "_link_diagnostics", None).status()
-                    if getattr(runtime, "_link_diagnostics", None) is not None
-                    else None
-                ),
-            }
-            for session_id, runtime in sessions.items()
-        },
+        "vtube_studio_sessions": vtube.status() if vtube is not None else {},
+        "douyin_visible_collector": collector.status() if collector is not None else None,
     }
 
 
 def install() -> None:
-    install_audio_iterator_compat(SimliSynchronizedRenderer)
-    install_simli_diagnostics_patch(SimliSynchronizedRenderer)
-    install_simli_crash_guard(SimliSynchronizedRenderer)
-    # Install after diagnostics/crash guard so the tuning clock owns the final playback path.
-    install_simli_tuning_patch(SimliSynchronizedRenderer)
-    # Avoid the PyAudioWPatch native defaultInputDevice assertion for Simli return audio.
-    install_simli_waveout_patch(SimliSynchronizedRenderer)
-    install_simli_runtime_guard(simli_session.SimliRuntime)
-    install_simli_sync_patch(simli_session)
-    # Final realtime v1 patch: O(1) status and short buffered waveOut playback.
-    install_simli_realtime_fix(SimliSynchronizedRenderer, simli_session.SimliRuntime)
-    # Timestamp GPT_OUT stages, then add utterance-aware idle-media trimming.
-    install_link_runtime_timestamps(simli_session.SimliRuntime)
-    install_simli_realtime_v2(SimliSynchronizedRenderer, simli_session.SimliRuntime)
-    # Keep the v1 monitor lifecycle, then replace its sampling/report logic with v2.
-    install_link_diagnostics(simli_session.SimliRuntime)
-    install_link_diagnostics_v2(simli_session.SimliRuntime)
-    # Apply the requested environment proxy policy before the SDK starts.
-    install_simli_network_policy(simli_session.SimliRuntime)
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
@@ -127,24 +49,9 @@ def install() -> None:
     def capabilities() -> list[str]:
         values = list(original_capabilities())
         for item in (
-            "provider.simli.av_sync",
-            "provider.simli.objective_diagnostics",
-            "provider.simli.tuning",
-            "provider.simli.tuning.test",
-            "provider.simli.tuning.lightweight_status",
-            "provider.simli.realtime_status",
-            "provider.simli.link_diagnostics",
-            "provider.simli.link_diagnostics.v2",
-            "provider.simli.link.test_epoch",
-            "provider.simli.rtc_stats",
-            "provider.simli.low_latency_idle_trim",
-            "provider.simli.network_policy",
             "provider.tencent_digital_human.reserved",
             "provider.aliyun_avatar.reserved",
             "provider.baidu_xiling.reserved",
-            "audio.live_out.auto",
-            "audio.live_out.waveout",
-            "audio.live_out.buffered_waveout",
             "bridge.single_instance",
             "bridge.control.serialized_send",
             "bridge.diagnostics.paths",
@@ -158,84 +65,11 @@ def install() -> None:
         started = time.monotonic()
         event("bridge_command_started", command_type=command_type, payload=redact(payload))
         try:
-            if command_type == "provider.start_session" and payload.get("provider_type") == "simli":
-                payload = dict(payload)
-                plan = dict(payload.get("provider_plan") or {})
-                config = dict(plan.get("config") or {})
-                config["_session_id"] = str(payload.get("session_id") or "unknown-session")
-                plan["config"] = config
-                payload["provider_plan"] = plan
-                event(
-                    "simli_session_start_requested",
-                    session_id=config["_session_id"],
-                    transport=config.get("transport"),
-                    model=config.get("model"),
-                    network_mode=config.get("network_mode"),
-                    low_latency_idle_trim=config.get("low_latency_idle_trim"),
-                    face_id_present=bool(config.get("face_id")),
-                    play_return_audio=config.get("play_return_audio"),
-                )
-
             provider_type = str(payload.get("provider_type") or "")
             if command_type == "provider.start_session" and provider_type in DOMESTIC_PROVIDER_TYPES:
                 result = start_domestic_provider(payload)
             elif command_type == "provider.stop_session" and provider_type in DOMESTIC_PROVIDER_TYPES:
                 result = stop_domestic_provider(payload)
-            elif command_type == "provider.simli.status":
-                result = self.simli.status()
-            elif command_type == "provider.simli.link.get":
-                result = manager_link_status(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                )
-            elif command_type == "provider.simli.link.report":
-                result = manager_link_report(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                )
-            elif command_type == "provider.simli.link.test.begin":
-                result = manager_begin_link_test(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                )
-            elif command_type == "provider.simli.diagnostics.report":
-                session_id = str(payload.get("session_id") or "") or None
-                report = manager_diagnostic_report(self.simli, session_id=session_id)
-                result = _attach_recent_events(self.simli, session_id, report)
-            elif command_type == "provider.simli.diagnostics.run":
-                session_id = str(payload.get("session_id") or "") or None
-                report = await run_manager_diagnostic(
-                    self.simli,
-                    session_id=session_id,
-                    duration_seconds=float(payload.get("duration_seconds", 12)),
-                )
-                result = _attach_recent_events(self.simli, session_id, report)
-            elif command_type == "provider.simli.tuning.get":
-                result = fast_manager_tuning_status(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                )
-            elif command_type == "provider.simli.tuning.apply":
-                result = manager_apply_tuning(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                    settings=dict(payload.get("settings") or {}),
-                    persist=bool(payload.get("persist", False)),
-                )
-            elif command_type == "provider.simli.tuning.reset":
-                result = manager_reset_tuning(
-                    self.simli,
-                    session_id=str(payload.get("session_id") or "") or None,
-                    persist=bool(payload.get("persist", True)),
-                )
-            elif command_type == "provider.simli.tuning.test":
-                session_id = str(payload.get("session_id") or "") or None
-                result = await manager_run_tuning_test(
-                    self.simli,
-                    session_id=session_id,
-                    duration_seconds=float(payload.get("duration_seconds", 18)),
-                )
-                result = _attach_recent_events(self.simli, session_id, result)
             elif command_type == "bridge.diagnostics.paths":
                 result = current_paths()
             elif command_type == "bridge.diagnostics.bundle":
@@ -274,10 +108,7 @@ async def main() -> None:
             "检测到另一个 ALiver Bridge 已经在运行，当前进程不会重复启动。"
             f" 已有进程 PID={owner_pid}，启动时间={owner_started}。"
         )
-        print(
-            "请先关闭旧 Bridge 窗口；找不到窗口时可运行 "
-            r".\scripts\stop_bridge_windows.ps1"
-        )
+        print("请先关闭旧 Bridge 窗口；找不到窗口时可运行 " r".\scripts\stop_bridge_windows.ps1")
         return
 
     with instance_lock:
@@ -301,10 +132,13 @@ async def main() -> None:
         finally:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
-            try:
-                await instance.simli.stop_all()
-            finally:
-                await asyncio.to_thread(instance.audio.shutdown)
+            collector = getattr(instance, "douyin_collector", None)
+            if collector is not None:
+                await asyncio.to_thread(collector.stop)
+            vtube = getattr(instance, "vtube_studio", None)
+            if vtube is not None:
+                await vtube.stop_all()
+            await asyncio.to_thread(instance.audio.shutdown)
             event("bridge_agent_main_exit")
             mark_graceful_exit()
 
