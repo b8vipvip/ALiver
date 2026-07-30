@@ -25,25 +25,16 @@ def classify_local_session(local_state: Any) -> tuple[str, str] | None:
     error = str(local_state.get("error") or "").strip()
 
     if status == "failed":
-        return (
-            "bridge_session_failed",
-            error or "Bridge 报告本地数字人会话已经失败。",
-        )
+        return ("bridge_session_failed", error or "Bridge 报告本地数字人会话已经失败。")
     if status in {"ended", "stopped", "closed", "ended_unexpected"}:
-        return (
-            "bridge_session_ended",
-            "Bridge 报告本地数字人会话已经结束。",
-        )
+        return ("bridge_session_ended", "Bridge 报告本地数字人会话已经结束。")
     if status in {"active", "running", "starting"} and (renderer_done or sender_done):
         ended_tasks = []
         if renderer_done:
             ended_tasks.append("数字人音视频渲染任务")
         if sender_done:
             ended_tasks.append("GPT_OUT 音频发送任务")
-        return (
-            "bridge_session_tasks_stopped",
-            "、".join(ended_tasks) + "已经停止，但旧状态仍显示为运行中。",
-        )
+        return ("bridge_session_tasks_stopped", "、".join(ended_tasks) + "已经停止，但旧状态仍显示为运行中。")
     return None
 
 
@@ -51,18 +42,8 @@ def _local_sessions(metadata: dict[str, Any]) -> dict[str, Any] | None:
     generic = metadata.get("avatar_sessions")
     if isinstance(generic, dict):
         return generic
-
-    # Backward compatibility with Bridge versions that only reported Simli sessions.
-    simli = metadata.get("simli_sessions")
     vtube = metadata.get("vtube_studio_sessions")
-    if isinstance(simli, dict) or isinstance(vtube, dict):
-        merged: dict[str, Any] = {}
-        if isinstance(simli, dict):
-            merged.update(simli)
-        if isinstance(vtube, dict):
-            merged.update(vtube)
-        return merged
-    return None
+    return vtube if isinstance(vtube, dict) else None
 
 
 def reconcile_bridge_sessions(
