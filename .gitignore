@@ -9,6 +9,7 @@ data/
 bridge/state.json
 bridge/bridge.local.json
 bridge/audio_routes.json
+bridge/douyin_visible_collector.local.json
 bridge/captures/
 *.log
 .DS_Store

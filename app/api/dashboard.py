@@ -17,7 +17,9 @@ router = APIRouter(
 
 @router.get("")
 def dashboard(db: Session = Depends(get_db)) -> dict:
-    provider_count = db.scalar(select(func.count(ProviderConfig.id))) or 0
+    provider_count = db.scalar(
+        select(func.count(ProviderConfig.id)).where(ProviderConfig.provider_type != "simli")
+    ) or 0
     active_sessions = db.scalar(
         select(func.count(AvatarSession.id)).where(
             AvatarSession.status.in_(["active", "running", "awaiting_manual", "ready"])

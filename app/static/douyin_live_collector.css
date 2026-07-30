@@ -2,6 +2,22 @@
   border-color: rgba(255, 64, 110, 0.45);
 }
 
+.douyin-visible-grid {
+  align-items: start;
+  margin-top: 12px;
+}
+
+.douyin-visible-grid label {
+  min-width: 0;
+}
+
+.collector-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+}
+
 .douyin-collector-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -25,13 +41,15 @@
 }
 
 .douyin-collector-metrics strong {
-  font-size: 1.45rem;
+  font-size: 1.35rem;
 }
 
 .douyin-collector-recent {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+  max-height: 360px;
+  overflow: auto;
 }
 
 .douyin-event-row {
@@ -39,11 +57,19 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.12);
+  overflow-wrap: anywhere;
 }
 
 .douyin-event-row small,
 .douyin-collector-notes {
   color: var(--muted);
+}
+
+.douyin-collector-notes {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid rgba(255, 64, 110, 0.55);
+  background: rgba(255, 64, 110, 0.05);
 }
 
 .douyin-collector-notes p {

@@ -6,7 +6,6 @@ from app.providers.domestic_realtime import (
 )
 from app.providers.liveavatar import LiveAvatarProvider
 from app.providers.mock import MockProvider
-from app.providers.simli import SimliProvider
 from app.providers.tavus import TavusProvider
 from app.providers.vtube_studio import VTubeStudioProvider
 
@@ -15,7 +14,6 @@ PROVIDER_CLASSES = {
     "tavus": TavusProvider,
     "akool": AkoolProvider,
     "liveavatar": LiveAvatarProvider,
-    "simli": SimliProvider,
     "vtube_studio": VTubeStudioProvider,
     "local_vtube_studio": VTubeStudioProvider,
     "tencent_digital_human": TencentDigitalHumanProvider,

@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.11.0"
+version = "0.12.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,8 +17,13 @@ dependencies = [
   "websockets>=14,<16",
   "numpy>=1.26,<3",
   "PyAudioWPatch>=0.2.12.8,<0.3; sys_platform == 'win32'",
-  "simli-ai[livekit]>=2.0.3,<3.0; sys_platform == 'win32'",
   "opencv-python>=4.10,<5.0; sys_platform == 'win32'",
+  "pywinauto>=0.6.9,<0.7; sys_platform == 'win32'",
+  "pywin32>=306,<400; sys_platform == 'win32'",
+  "mss>=10,<11; sys_platform == 'win32'",
+  "rapidocr>=3.8,<4; sys_platform == 'win32'",
+  "onnxruntime>=1.20,<2; sys_platform == 'win32'",
+  "pillow>=10,<13; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -46,13 +51,9 @@ ignore = ["B008"]
 [tool.ruff.lint.per-file-ignores]
 "app/main.py" = ["I001"]
 "bridge/audio_capture.py" = ["F841"]
-"bridge/simli_sync.py" = ["B039"]
-"bridge/simli_diagnostics.py" = ["I001"]
 "bridge/runtime_diagnostics.py" = ["I001"]
-"bridge/simli_tuning.py" = ["I001"]
-"bridge/simli_link_diagnostics.py" = ["E501"]
-"bridge/simli_link_diagnostics_v2.py" = ["E501"]
-"bridge/simli_realtime_v2.py" = ["E501"]
+"bridge/douyin_visible_collector.py" = ["E501", "I001"]
+"bridge/douyin_visible_runtime_patch.py" = ["E501"]
 "bridge/vtube_motion_v2.py" = ["E501"]
 "bridge/avatar_action_router.py" = ["E501", "UP035"]
 "bridge/avatar_action_control.py" = ["E501", "I001"]

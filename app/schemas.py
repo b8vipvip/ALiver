@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 PROVIDER_TYPE_PATTERN = (
-    "^(mock|tavus|akool|liveavatar|simli|vtube_studio|local_vtube_studio|"
+    "^(mock|tavus|akool|liveavatar|vtube_studio|local_vtube_studio|"
     "tencent_digital_human|aliyun_avatar|baidu_xiling)$"
 )
 

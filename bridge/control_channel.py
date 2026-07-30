@@ -7,6 +7,7 @@ from typing import Any
 
 import websockets
 
+from bridge.douyin_visible_collector import DouyinVisibleCollectorManager
 from bridge.runtime_diagnostics import event, exception
 from bridge.vtube_studio import PROVIDER_TYPES as VTUBE_STUDIO_PROVIDER_TYPES
 from bridge.vtube_studio import VTubeStudioSessionManager
@@ -14,7 +15,7 @@ from bridge.vtube_studio import VTubeStudioSessionManager
 
 def install_bridge_control_guard(agent_module: Any) -> None:
     bridge_class = agent_module.BridgeAgent
-    if getattr(bridge_class, "_aliver_control_guard_v1", False):
+    if getattr(bridge_class, "_aliver_control_guard_v2", False):
         return
 
     original_init = bridge_class.__init__
@@ -27,6 +28,7 @@ def install_bridge_control_guard(agent_module: Any) -> None:
         self._control_send_lock = asyncio.Lock()
         self._control_connection_generation = 0
         self.vtube_studio = VTubeStudioSessionManager()
+        self.douyin_collector = DouyinVisibleCollectorManager(self)
 
     def patched_capabilities() -> list[str]:
         values = list(original_capabilities())
@@ -38,6 +40,10 @@ def install_bridge_control_guard(agent_module: Any) -> None:
             "provider.vtube_studio.authorization",
             "provider.vtube_studio.live_config",
             "provider.avatar.active_session_metadata",
+            "douyin.visible.uia",
+            "douyin.visible.ocr",
+            "douyin.visible.hybrid",
+            "douyin.visible.autostart",
         ):
             if item not in values:
                 values.append(item)
@@ -47,13 +53,8 @@ def install_bridge_control_guard(agent_module: Any) -> None:
         value = dict(original_system_info(self))
         vtube_sessions = self.vtube_studio.status()
         value["vtube_studio_sessions"] = vtube_sessions
-        avatar_sessions: dict[str, Any] = {}
-        simli_sessions = value.get("simli_sessions")
-        if isinstance(simli_sessions, dict):
-            avatar_sessions.update(simli_sessions)
-        if isinstance(vtube_sessions, dict):
-            avatar_sessions.update(vtube_sessions)
-        value["avatar_sessions"] = avatar_sessions
+        value["avatar_sessions"] = dict(vtube_sessions) if isinstance(vtube_sessions, dict) else {}
+        value["douyin_visible_collector"] = self.douyin_collector.status()
         return value
 
     async def patched_execute(
@@ -67,9 +68,7 @@ def install_bridge_control_guard(agent_module: Any) -> None:
         if command_type == "provider.stop_session" and provider_type in VTUBE_STUDIO_PROVIDER_TYPES:
             return await self.vtube_studio.stop(str(payload.get("session_id") or ""))
         if command_type == "provider.vtube_studio.status":
-            return self.vtube_studio.status(
-                str(payload.get("session_id") or "").strip() or None
-            )
+            return self.vtube_studio.status(str(payload.get("session_id") or "").strip() or None)
         if command_type == "provider.vtube_studio.refresh":
             return await self.vtube_studio.refresh(str(payload.get("session_id") or ""))
         if command_type == "provider.vtube_studio.authorize":
@@ -82,14 +81,10 @@ def install_bridge_control_guard(agent_module: Any) -> None:
                 if not isinstance(hotkeys, dict):
                     raise ValueError("hotkeys must be a JSON object")
                 runtime.config["hotkeys"] = {
-                    str(key).strip().lower(): str(value or "").strip()
-                    for key, value in hotkeys.items()
+                    str(key).strip().lower(): str(value or "").strip() for key, value in hotkeys.items()
                 }
             if payload.get("action_cooldown_ms") is not None:
-                runtime.config["action_cooldown_ms"] = max(
-                    0,
-                    min(int(payload["action_cooldown_ms"]), 30000),
-                )
+                runtime.config["action_cooldown_ms"] = max(0, min(int(payload["action_cooldown_ms"]), 30000))
             runtime.state["last_refresh_at"] = datetime.now(timezone.utc).isoformat()
             return runtime.status()
         if command_type == "provider.vtube_studio.action":
@@ -99,15 +94,27 @@ def install_bridge_control_guard(agent_module: Any) -> None:
                 hotkey=str(payload.get("hotkey") or "").strip() or None,
                 force=bool(payload.get("force", False)),
             )
+        if command_type == "douyin.visible.status":
+            return self.douyin_collector.status()
+        if command_type == "douyin.visible.start":
+            return await asyncio.to_thread(self.douyin_collector.start, dict(payload.get("settings") or payload))
+        if command_type == "douyin.visible.stop":
+            return await asyncio.to_thread(self.douyin_collector.stop)
+        if command_type == "douyin.visible.configure":
+            return await asyncio.to_thread(
+                self.douyin_collector.update_config,
+                dict(payload.get("settings") or payload),
+            )
+        if command_type == "douyin.visible.scan_once":
+            return await asyncio.to_thread(self.douyin_collector.scan_once)
+        if command_type == "douyin.visible.calibrate_default":
+            return await asyncio.to_thread(self.douyin_collector.calibrate_default)
         return await original_execute(self, command_type, payload)
 
     async def safe_send(self, ws, payload: dict[str, Any]) -> bool:
         try:
             async with self._control_send_lock:
-                await asyncio.wait_for(
-                    ws.send(json.dumps(payload, ensure_ascii=False)),
-                    timeout=5.0,
-                )
+                await asyncio.wait_for(ws.send(json.dumps(payload, ensure_ascii=False)), timeout=5.0)
             return True
         except (websockets.ConnectionClosed, TimeoutError, OSError) as exc:
             event(
@@ -120,14 +127,9 @@ def install_bridge_control_guard(agent_module: Any) -> None:
 
     async def patched_heartbeat_loop(self, ws) -> None:
         configured = float(self.config.get("heartbeat_seconds", 10))
-        # Reconciliation uses this heartbeat. Keep it frequent on the local control plane
-        # so a closed/failed avatar disappears from the server UI within a few seconds.
         interval = min(3.0, max(1.0, configured))
         while True:
-            sent = await self._control_safe_send(
-                ws,
-                {"type": "heartbeat", "metadata": self.system_info()},
-            )
+            sent = await self._control_safe_send(ws, {"type": "heartbeat", "metadata": self.system_info()})
             if not sent:
                 return
             await asyncio.sleep(interval)
@@ -138,18 +140,9 @@ def install_bridge_control_guard(agent_module: Any) -> None:
         payload = message.get("payload") or {}
         try:
             data = await self.execute(command_type, payload)
-            response = {
-                "type": "result",
-                "command_id": command_id,
-                "ok": True,
-                "data": data,
-            }
+            response = {"type": "result", "command_id": command_id, "ok": True, "data": data}
         except asyncio.CancelledError:
-            event(
-                "bridge_control_command_cancelled",
-                command_id=command_id,
-                command_type=command_type,
-            )
+            event("bridge_control_command_cancelled", command_id=command_id, command_type=command_type)
             raise
         except Exception as exc:
             response = {
@@ -163,6 +156,7 @@ def install_bridge_control_guard(agent_module: Any) -> None:
     async def patched_run(self) -> None:
         try:
             await self.sync_registration()
+            await asyncio.to_thread(self.douyin_collector.autostart)
             while not self.stop_event.is_set():
                 connection_tasks: set[asyncio.Task] = set()
                 heartbeat: asyncio.Task | None = None
@@ -214,6 +208,7 @@ def install_bridge_control_guard(agent_module: Any) -> None:
                     print(f"Bridge disconnected: {exc}. Reconnecting in 3 seconds...")
                     await asyncio.sleep(3)
         finally:
+            await asyncio.to_thread(self.douyin_collector.stop)
             await self.vtube_studio.stop_all()
 
     bridge_class.__init__ = patched_init
@@ -224,4 +219,4 @@ def install_bridge_control_guard(agent_module: Any) -> None:
     bridge_class.heartbeat_loop = patched_heartbeat_loop
     bridge_class.handle_command = patched_handle_command
     bridge_class.run = patched_run
-    bridge_class._aliver_control_guard_v1 = True
+    bridge_class._aliver_control_guard_v2 = True

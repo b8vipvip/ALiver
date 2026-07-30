@@ -1,112 +1,214 @@
 (() => {
   let installed = false;
-  let lastStatus = null;
+  let localStatus = null;
+  let serverStatus = null;
 
   function extensionId() {
     return document.getElementById('auto-director-extension')?.value || '';
   }
 
-  function panel() {
-    return document.getElementById('douyin-live-collector-panel');
+  function connectedBridges() {
+    return (state.bridges || []).filter(item => item.connected);
   }
 
-  function collectorConfig() {
+  function selectedBridgeId() {
+    return document.getElementById('douyin-visible-bridge')?.value
+      || connectedBridges()[0]?.id
+      || '';
+  }
+
+  function numberValue(id, fallback) {
+    const value = Number(document.getElementById(id)?.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function settingsFromForm() {
     return {
-      aliver_url: location.origin,
-      admin_token: localStorage.getItem('aliverAdminToken') || '',
       extension_id: extensionId(),
-      collector_id: 'aliver-douyin-live-companion',
-      heartbeat_seconds: 5,
-      batch_max_items: 100,
-      request_timeout_seconds: 8,
+      collector_id: 'douyin-visible-ui',
+      mode: document.getElementById('douyin-visible-mode')?.value || 'hybrid',
+      window_title_pattern: document.getElementById('douyin-visible-window')?.value || '.*直播伴侣.*',
+      scan_interval_seconds: numberValue('douyin-visible-interval', 1.0),
+      confidence_threshold: numberValue('douyin-visible-confidence', 0.72),
+      uia_fallback_seconds: numberValue('douyin-visible-fallback', 4.0),
+      ocr_region: {
+        x: numberValue('douyin-visible-region-x', 0.782),
+        y: numberValue('douyin-visible-region-y', 0.405),
+        width: numberValue('douyin-visible-region-width', 0.205),
+        height: numberValue('douyin-visible-region-height', 0.555),
+      },
+      capture_comments: Boolean(document.getElementById('douyin-visible-comments')?.checked),
+      capture_gifts: Boolean(document.getElementById('douyin-visible-gifts')?.checked),
+      capture_follows: Boolean(document.getElementById('douyin-visible-follows')?.checked),
+      capture_shares: Boolean(document.getElementById('douyin-visible-shares')?.checked),
+      capture_likes: Boolean(document.getElementById('douyin-visible-likes')?.checked),
+      capture_join_notices: Boolean(document.getElementById('douyin-visible-joins')?.checked),
     };
   }
 
-  function downloadConfig() {
-    const config = collectorConfig();
-    if (!config.extension_id) throw new Error('请先选择 Chrome 导演扩展');
-    if (!config.admin_token) throw new Error('请先在右上角保存 ALiver 管理令牌');
-    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'douyin_collector.json';
-    anchor.click();
-    URL.revokeObjectURL(url);
-    toast('采集器配置已生成。请放到采集器 exe 同目录。');
+  function fillBridgeOptions() {
+    const select = document.getElementById('douyin-visible-bridge');
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = connectedBridges().map(item => (
+      `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} · ${escapeHtml(item.machine_name)}</option>`
+    )).join('') || '<option value="">没有在线 Bridge</option>';
+    if ([...select.options].some(option => option.value === current)) select.value = current;
   }
 
-  function renderStatus(value) {
-    lastStatus = value;
+  function applyConfig(config = {}) {
+    const set = (id, value) => {
+      const element = document.getElementById(id);
+      if (element && value !== undefined && value !== null && document.activeElement !== element) element.value = value;
+    };
+    set('douyin-visible-mode', config.mode);
+    set('douyin-visible-window', config.window_title_pattern);
+    set('douyin-visible-interval', config.scan_interval_seconds);
+    set('douyin-visible-confidence', config.confidence_threshold);
+    set('douyin-visible-fallback', config.uia_fallback_seconds);
+    const region = config.ocr_region || {};
+    set('douyin-visible-region-x', region.x);
+    set('douyin-visible-region-y', region.y);
+    set('douyin-visible-region-width', region.width);
+    set('douyin-visible-region-height', region.height);
+    for (const [id, key] of [
+      ['douyin-visible-comments', 'capture_comments'],
+      ['douyin-visible-gifts', 'capture_gifts'],
+      ['douyin-visible-follows', 'capture_follows'],
+      ['douyin-visible-shares', 'capture_shares'],
+      ['douyin-visible-likes', 'capture_likes'],
+      ['douyin-visible-joins', 'capture_join_notices'],
+    ]) {
+      const element = document.getElementById(id);
+      if (element && key in config && document.activeElement !== element) element.checked = Boolean(config[key]);
+    }
+  }
+
+  function sourceLabel(value) {
+    return ({ uia: 'UIA', ocr: 'OCR', hybrid: 'UIA + OCR' })[value] || value || '未工作';
+  }
+
+  function render() {
     const badge = document.getElementById('douyin-collector-badge');
     const diagnosis = document.getElementById('douyin-collector-diagnosis');
     const metrics = document.getElementById('douyin-collector-metrics');
     const recent = document.getElementById('douyin-collector-recent');
-    if (!badge || !diagnosis || !metrics || !recent) return;
+    const raw = document.getElementById('douyin-collector-raw');
+    if (!badge || !diagnosis || !metrics || !recent || !raw) return;
 
-    badge.textContent = value.connected ? '采集器在线' : '采集器离线';
-    badge.className = `badge ${value.connected ? 'good' : 'warn'}`;
-    diagnosis.className = `diagnosis ${value.connected ? 'ok' : 'warn'}`;
-    diagnosis.textContent = value.connected
-      ? `已连接直播伴侣采集器 · 伴侣 ${value.mate_version || '未知版本'} · 最后心跳 ${formatTime(value.last_seen_at)}`
-      : '尚未收到采集器心跳。先生成配置，再由直播伴侣互动插件启动采集器。';
+    const running = Boolean(localStatus?.running);
+    const connected = Boolean(serverStatus?.connected || localStatus?.connected);
+    badge.textContent = running ? (connected ? '采集中' : '等待窗口') : '已停止';
+    badge.className = `badge ${connected ? 'good' : running ? 'warn' : 'bad'}`;
+    const error = localStatus?.last_error || serverStatus?.last_error;
+    diagnosis.className = `diagnosis ${error ? 'bad' : connected ? 'ok' : 'warn'}`;
+    diagnosis.textContent = error
+      ? error
+      : running
+        ? `正在读取“${localStatus?.window?.title || '抖音直播伴侣'}” · 当前通道 ${sourceLabel(localStatus?.active_source)} · 自动启动已保存`
+        : '采集器随 Windows Bridge 运行。第一次点击“自动校准”，之后启动会自动记住窗口、区域和总导演扩展。';
 
-    const counts = value.counts || {};
+    const counts = serverStatus?.counts || {};
     metrics.innerHTML = `
-      <article><span>收到</span><strong>${Number(value.received || 0)}</strong><small>原始消息</small></article>
-      <article><span>进入导演</span><strong>${Number(value.accepted || 0)}</strong><small>评论/礼物等</small></article>
-      <article><span>重复</span><strong>${Number(value.duplicates || 0)}</strong><small>按 msg_id 去重</small></article>
-      <article><span>忽略</span><strong>${Number(value.ignored || 0)}</strong><small>取消关注/未知类型</small></article>
-      <article><span>评论</span><strong>${Number(counts.live_comment || 0)}</strong><small>live_comment</small></article>
-      <article><span>礼物</span><strong>${Number(counts.live_gift || 0)}</strong><small>live_gift</small></article>
-      <article><span>关注</span><strong>${Number(counts.live_follow || 0)}</strong><small>live_follow</small></article>
-      <article><span>点赞</span><strong>${Number(counts.live_like || 0)}</strong><small>live_like</small></article>
+      <article><span>UIA</span><strong>${localStatus?.uia_available ? '可用' : '不可用'}</strong><small>优先读取可访问文本</small></article>
+      <article><span>OCR</span><strong>${localStatus?.ocr_available ? '可用' : '不可用'}</strong><small>局部截图中文识别</small></article>
+      <article><span>扫描</span><strong>${Number(localStatus?.scan_count || 0)}</strong><small>${Number(localStatus?.raw_line_count || 0)} 条文本</small></article>
+      <article><span>进入导演</span><strong>${Number(serverStatus?.accepted || localStatus?.sent_count || 0)}</strong><small>已去重事件</small></article>
+      <article><span>评论</span><strong>${Number(counts.comment || 0)}</strong><small>comment</small></article>
+      <article><span>礼物</span><strong>${Number(counts.gift || 0)}</strong><small>gift</small></article>
+      <article><span>关注</span><strong>${Number(counts.follow || 0)}</strong><small>follow</small></article>
+      <article><span>重复</span><strong>${Number(serverStatus?.duplicates || localStatus?.duplicate_count || 0)}</strong><small>画面驻留去重</small></article>
     `;
 
-    recent.innerHTML = (value.recent || []).slice().reverse().map(item => `
+    const events = (serverStatus?.recent || localStatus?.recent_events || []).slice().reverse();
+    recent.innerHTML = events.map(item => `
       <div class="douyin-event-row">
-        <div><strong>${escapeHtml(item.event_type || item.type || 'unknown')}</strong> · ${escapeHtml(item.user_name || '')}</div>
+        <div><strong>${escapeHtml(item.event_type || 'unknown')}</strong> · ${escapeHtml(item.user_name || '')}</div>
         <div>${escapeHtml(item.content || item.reason || '')}</div>
-        <small>${escapeHtml(item.status || '')} ${item.score !== undefined ? `· ${item.score}分` : ''} · ${formatTime(item.at)}</small>
+        <small>${escapeHtml(sourceLabel(item.source))}${item.confidence !== undefined ? ` · ${Number(item.confidence).toFixed(2)}` : ''}${item.score !== undefined ? ` · ${item.score}分` : ''} · ${formatTime(item.at || item.observed_at)}</small>
       </div>
-    `).join('') || '<p class="hint">尚未收到真实互动消息。</p>';
+    `).join('') || '<p class="hint">尚未识别到互动事件。</p>';
+
+    raw.innerHTML = (localStatus?.recent_lines || []).slice().reverse().map(item => `
+      <div class="douyin-event-row">
+        <div><strong>${escapeHtml(sourceLabel(item.source))}</strong> · ${item.confidence !== undefined ? Number(item.confidence).toFixed(2) : '1.00'}</div>
+        <div>${escapeHtml(item.text || '')}</div>
+      </div>
+    `).join('') || '<p class="hint">尚未读取到互动区文本。</p>';
+  }
+
+  async function bridgeCommand(command, payload = {}, timeout = 30) {
+    const bridgeId = selectedBridgeId();
+    if (!bridgeId) throw new Error('没有在线 Windows Bridge');
+    return sendBridgeCommand(bridgeId, command, payload, timeout);
   }
 
   async function refreshStatus() {
+    fillBridgeOptions();
+    const bridgeId = selectedBridgeId();
     const id = extensionId();
-    if (!id || !panel()) return;
-    try {
-      renderStatus(await api(`/api/douyin-live/status?extension_id=${encodeURIComponent(id)}`));
-    } catch (error) {
-      const diagnosis = document.getElementById('douyin-collector-diagnosis');
-      if (diagnosis) {
-        diagnosis.className = 'diagnosis bad';
-        diagnosis.textContent = error.message;
+    if (bridgeId) {
+      try {
+        localStatus = await bridgeCommand('douyin.visible.status', {}, 12);
+        applyConfig(localStatus.config || {});
+      } catch (error) {
+        localStatus = { last_error: error.message };
       }
     }
+    if (id) {
+      try {
+        serverStatus = await api(`/api/douyin-live/status?extension_id=${encodeURIComponent(id)}`);
+      } catch (error) {
+        serverStatus = { last_error: error.message };
+      }
+    }
+    render();
+  }
+
+  async function startCollector() {
+    if (!extensionId()) throw new Error('请先选择 Chrome 导演扩展并保存自动导演配置');
+    const settings = settingsFromForm();
+    localStatus = await bridgeCommand('douyin.visible.start', { settings }, 45);
+    applyConfig(localStatus.config || {});
+    toast('抖音可视互动采集器已启动，并已保存为 Bridge 自动启动配置');
+    await refreshStatus();
+  }
+
+  async function stopCollector() {
+    localStatus = await bridgeCommand('douyin.visible.stop', {}, 20);
+    toast('抖音可视互动采集器已停止');
+    await refreshStatus();
+  }
+
+  async function scanOnce() {
+    localStatus = await bridgeCommand('douyin.visible.scan_once', {}, 60);
+    toast('已完成一次 UIA / OCR 扫描');
+    await refreshStatus();
+  }
+
+  async function calibrate() {
+    localStatus = await bridgeCommand('douyin.visible.calibrate_default', {}, 30);
+    applyConfig(localStatus.config || {});
+    toast('已按当前直播伴侣布局自动定位右侧“互动消息”区域');
+    await refreshStatus();
   }
 
   async function simulate() {
     const id = extensionId();
     if (!id) throw new Error('请先选择 Chrome 导演扩展');
-    const seed = Date.now();
     const result = await api('/api/douyin-live/simulate', {
       method: 'POST',
-      body: JSON.stringify({
-        extension_id: id,
-        collector_id: 'aliver-ui-simulator',
-        event_name: 'OPEN_LIVE_DATA',
-        metadata: { simulated: true, plugin_version: 'ui' },
-        payload: [
-          { msg_id: `comment-${seed}`, timestamp: seed, msg_type: 2, msg_type_str: 'live_comment', nickname: '测试观众', content: '数字人直播是怎么实现的？' },
-          { msg_id: `gift-${seed}`, timestamp: seed + 1, msg_type: 3, msg_type_str: 'live_gift', nickname: '礼物观众', gift_name: '小心心', gift_num: 1, sec_gift_id: 'debug' },
-          { msg_id: `follow-${seed}`, timestamp: seed + 2, msg_type: 5, msg_type_str: 'live_follow', nickname: '新关注观众', user_follow_action: 1 },
-        ],
-      }),
+      body: JSON.stringify({ extension_id: id, collector_id: 'douyin-visible-ui-simulator' }),
     });
-    toast(`已模拟 ${result.accepted} 条抖音互动事件`);
+    toast(`已模拟 ${result.accepted} 条可视互动事件`);
     await refreshStatus();
     if (typeof loadAutoDirector === 'function') await loadAutoDirector();
+  }
+
+  function bind(id, handler) {
+    document.getElementById(id)?.addEventListener('click', () => {
+      handler().catch(error => toast(error.message, true));
+    });
   }
 
   function install() {
@@ -122,46 +224,68 @@
     article.innerHTML = `
       <div class="section-title">
         <div>
-          <h2>真实抖音互动采集器</h2>
-          <p class="hint">直播伴侣官方互动插件 → OPEN_LIVE_DATA → ALiver → 专业总导演。支持评论、礼物、点赞、关注和粉丝团；分享仅保留兼容入口。</p>
+          <h2>抖音直播伴侣可视互动采集器</h2>
+          <p class="hint">只读取直播伴侣界面已经显示的互动：UI Automation 优先，读取不到时自动用局部 OCR。不会抓包、注入进程、读取 Cookie 或调用抖音私有接口。</p>
         </div>
-        <span id="douyin-collector-badge" class="badge warn">采集器离线</span>
+        <span id="douyin-collector-badge" class="badge warn">检查中</span>
+      </div>
+      <div class="grid two douyin-visible-grid">
+        <div>
+          <label>执行 Bridge<select id="douyin-visible-bridge"><option value="">等待在线 Bridge</option></select></label>
+          <label>采集模式<select id="douyin-visible-mode"><option value="hybrid">混合：UIA 优先，OCR 兜底</option><option value="uia">仅 UIA</option><option value="ocr">仅 OCR</option></select></label>
+          <label>窗口标题正则<input id="douyin-visible-window" value=".*直播伴侣.*"></label>
+          <div class="inline-fields">
+            <label>扫描间隔（秒）<input id="douyin-visible-interval" type="number" min="0.4" max="10" step="0.1" value="1"></label>
+            <label>OCR 置信度<input id="douyin-visible-confidence" type="number" min="0.3" max="0.99" step="0.01" value="0.72"></label>
+            <label>UIA 无数据后 OCR（秒）<input id="douyin-visible-fallback" type="number" min="1" max="30" step="0.5" value="4"></label>
+          </div>
+        </div>
+        <div>
+          <strong>互动消息 OCR 区域（相对直播伴侣窗口）</strong>
+          <div class="inline-fields">
+            <label>X<input id="douyin-visible-region-x" type="number" min="0" max="1" step="0.001" value="0.782"></label>
+            <label>Y<input id="douyin-visible-region-y" type="number" min="0" max="1" step="0.001" value="0.405"></label>
+            <label>宽<input id="douyin-visible-region-width" type="number" min="0.02" max="1" step="0.001" value="0.205"></label>
+            <label>高<input id="douyin-visible-region-height" type="number" min="0.02" max="1" step="0.001" value="0.555"></label>
+          </div>
+          <div class="collector-checks">
+            <label class="check-row"><input id="douyin-visible-comments" type="checkbox" checked>评论</label>
+            <label class="check-row"><input id="douyin-visible-gifts" type="checkbox" checked>礼物</label>
+            <label class="check-row"><input id="douyin-visible-follows" type="checkbox" checked>关注</label>
+            <label class="check-row"><input id="douyin-visible-shares" type="checkbox" checked>分享提示</label>
+            <label class="check-row"><input id="douyin-visible-likes" type="checkbox">单条点赞</label>
+            <label class="check-row"><input id="douyin-visible-joins" type="checkbox">观众进入</label>
+          </div>
+        </div>
       </div>
       <div class="actions">
-        <button id="douyin-collector-config" type="button">生成采集器配置</button>
-        <button id="douyin-collector-simulate" type="button" class="secondary">模拟评论/礼物/关注</button>
+        <button id="douyin-visible-calibrate" type="button" class="secondary">自动校准互动区</button>
+        <button id="douyin-visible-start" type="button">保存并启动</button>
+        <button id="douyin-visible-stop" type="button" class="danger">停止采集</button>
+        <button id="douyin-visible-scan" type="button" class="secondary">立即扫描一次</button>
+        <button id="douyin-collector-simulate" type="button" class="secondary">模拟完整链路</button>
         <button id="douyin-collector-refresh" type="button" class="secondary">刷新状态</button>
       </div>
-      <div id="douyin-collector-diagnosis" class="diagnosis warn">等待采集器连接。</div>
+      <div id="douyin-collector-diagnosis" class="diagnosis warn">正在读取 Bridge 状态。</div>
       <div id="douyin-collector-metrics" class="douyin-collector-metrics"></div>
-      <details>
-        <summary>最近收到的互动</summary>
-        <div id="douyin-collector-recent" class="douyin-collector-recent"><p class="hint">尚未收到真实互动消息。</p></div>
-      </details>
-      <details>
-        <summary>官方能力与接入限制</summary>
-        <div class="douyin-collector-notes">
-          <p>需要在抖音开放平台创建或获批直播互动插件，并申请评论、礼物、点赞、关注等互动数据权限。</p>
-          <p>直播伴侣官方 OPEN_LIVE_DATA 当前文档列出 live_like、live_comment、live_gift、live_fansclub、live_follow；没有独立 live_share 消息。</p>
-          <p>本面板不会抓取网页私有接口，也不会绕过平台权限。</p>
-        </div>
-      </details>
+      <div class="grid two">
+        <details open><summary>解析后的互动事件</summary><div id="douyin-collector-recent" class="douyin-collector-recent"><p class="hint">尚未识别到互动事件。</p></div></details>
+        <details><summary>UIA / OCR 原始文本</summary><div id="douyin-collector-raw" class="douyin-collector-recent"><p class="hint">尚未读取文本。</p></div></details>
+      </div>
+      <div class="douyin-collector-notes">
+        <p>根据你当前直播伴侣布局，默认区域已对准右下角“互动消息”。窗口大小变化时使用“自动校准互动区”。</p>
+        <p>直播伴侣没有在界面显示的事件无法采集；OCR 只能识别可见文字，礼物纯动画若无文字不会被伪造为事件。</p>
+      </div>
     `;
-    const eventPanel = eventForm.closest('.panel');
-    eventPanel?.insertAdjacentElement('beforebegin', article);
+    eventForm.closest('.panel')?.insertAdjacentElement('beforebegin', article);
 
-    document.getElementById('douyin-collector-config').addEventListener('click', () => {
-      try { downloadConfig(); } catch (error) { toast(error.message, true); }
-    });
-    document.getElementById('douyin-collector-simulate').addEventListener('click', () => {
-      simulate().catch(error => toast(error.message, true));
-    });
-    document.getElementById('douyin-collector-refresh').addEventListener('click', () => {
-      refreshStatus().catch(error => toast(error.message, true));
-    });
-    document.getElementById('auto-director-extension')?.addEventListener('change', () => {
-      setTimeout(() => refreshStatus().catch(() => {}), 100);
-    });
+    bind('douyin-visible-start', startCollector);
+    bind('douyin-visible-stop', stopCollector);
+    bind('douyin-visible-scan', scanOnce);
+    bind('douyin-visible-calibrate', calibrate);
+    bind('douyin-collector-simulate', simulate);
+    bind('douyin-collector-refresh', refreshStatus);
+    document.getElementById('auto-director-extension')?.addEventListener('change', () => setTimeout(refreshStatus, 100));
     refreshStatus().catch(() => {});
     return true;
   }
@@ -175,8 +299,6 @@
   }
 
   setInterval(() => {
-    if (document.getElementById('tab-auto-director')?.classList.contains('active')) {
-      refreshStatus().catch(() => {});
-    }
+    if (document.getElementById('tab-auto-director')?.classList.contains('active')) refreshStatus().catch(() => {});
   }, 3000);
 })();
