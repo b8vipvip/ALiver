@@ -16,9 +16,10 @@
 
   function captureLabel(value) {
     return ({
-      printwindow: '窗口内容捕获（不受浏览器遮挡）',
-      screen_visible: '前台屏幕兜底（直播伴侣必须无遮挡）',
-      screen_region_clear: '屏幕兜底（仅要求 OCR 互动区域无遮挡）',
+      windows_graphics_capture: 'Windows Graphics Capture（允许窗口被遮挡）',
+      printwindow: 'PrintWindow 兼容捕获',
+      screen_visible: '前台屏幕兼容兜底',
+      screen_region_clear: '屏幕兼容兜底（互动区无遮挡）',
     })[value] || value || '尚未捕获';
   }
 
@@ -30,7 +31,7 @@
   }
 
   async function refreshPreview() {
-    setMessage('正在直接读取直播伴侣窗口内容……');
+    setMessage('正在通过 Windows Graphics Capture 读取直播伴侣窗口……');
     const result = await command('douyin.visible.preview', {}, 90);
     const windowImage = document.getElementById('douyin-capture-window-image');
     const regionImage = document.getElementById('douyin-capture-region-image');
@@ -60,7 +61,7 @@
           <strong>${escapeHtml(item.text || '')}</strong>
           <small>${escapeHtml(item.control_type || '未知控件')} · ${escapeHtml(item.class_name || '')} · ${escapeHtml(item.automation_id || '')}</small>
         </div>
-      `).join('') || '<p class="hint">互动区域没有暴露可访问文本，将继续使用窗口内容 OCR。</p>';
+      `).join('') || '<p class="hint">互动区域没有暴露标准 UIA 文本。可在未开播时启用 Electron Accessibility，或使用 Windows Graphics Capture + OCR。</p>';
     }
     setMessage(`UIA 探针完成：整个窗口 ${Number(result.control_count || 0)} 个文本控件，互动区域 ${Number(result.region_control_count || 0)} 个。`);
   }
@@ -117,16 +118,16 @@
       <div class="section-title douyin-capture-title">
         <div>
           <h3>窗口捕获预览与只读探针</h3>
-          <p class="hint">先看“实际窗口截图”和“OCR 裁剪区”，再判断识别问题。不会扫描安装包、不会注入直播伴侣进程。</p>
+          <p class="hint">先测试三级通道，再查看 WGC 实际窗口截图和 OCR 裁剪区。不会扫描安装包、不会注入直播伴侣进程。</p>
         </div>
       </div>
       <div class="actions">
-        <button id="douyin-capture-preview" type="button" class="secondary">查看实际截图</button>
-        <button id="douyin-uia-probe" type="button" class="secondary">运行 UIA 探针</button>
+        <button id="douyin-capture-preview" type="button" class="secondary">查看 WGC 实际截图</button>
+        <button id="douyin-uia-probe" type="button" class="secondary">运行标准 UIA 探针</button>
         <button id="douyin-export-diagnostics" type="button" class="secondary">导出采集诊断包</button>
         <button id="douyin-clear-local-history" type="button" class="danger">清空本地测试显示</button>
       </div>
-      <div id="douyin-capture-diagnostics-message" class="diagnosis warn">尚未获取窗口截图。屏幕兜底现在按 OCR 互动区域的实际遮挡判断，不要求直播伴侣必须是前台窗口。</div>
+      <div id="douyin-capture-diagnostics-message" class="diagnosis warn">尚未获取窗口截图。Windows Graphics Capture 正常时允许其他窗口覆盖直播伴侣，但直播伴侣仍需保持非最小化。</div>
       <div class="douyin-capture-preview-grid">
         <figure>
           <figcaption>直播伴侣窗口实际捕获内容</figcaption>
@@ -139,7 +140,7 @@
       </div>
       <p id="douyin-capture-preview-meta" class="hint">尚未捕获。</p>
       <details>
-        <summary>UIA 探针结果</summary>
+        <summary>标准 UIA 探针结果</summary>
         <div id="douyin-uia-probe-results" class="douyin-uia-probe-results"><p class="hint">尚未运行探针。</p></div>
       </details>
       <details>
