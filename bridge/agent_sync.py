@@ -12,6 +12,7 @@ from bridge.domestic_provider_scaffolds import (
     start_domestic_provider,
     stop_domestic_provider,
 )
+from bridge.douyin_visible_runtime_patch import install_visible_collector_runtime_patch
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -41,6 +42,7 @@ def _session_summary(agent_instance: Any) -> dict[str, Any]:
 
 
 def install() -> None:
+    install_visible_collector_runtime_patch()
     install_bridge_control_guard(agent)
     agent.BRIDGE_VERSION = BRIDGE_VERSION
     original_capabilities = agent.BridgeAgent.capabilities
