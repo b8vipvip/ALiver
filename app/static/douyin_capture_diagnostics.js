@@ -1,5 +1,6 @@
 (() => {
   let installed = false;
+  let lastDiagnosticPath = '';
 
   function selectedBridgeId() {
     return document.getElementById('douyin-visible-bridge')?.value
@@ -17,6 +18,7 @@
     return ({
       printwindow: '窗口内容捕获（不受浏览器遮挡）',
       screen_visible: '前台屏幕兜底（直播伴侣必须无遮挡）',
+      screen_region_clear: '屏幕兜底（仅要求 OCR 互动区域无遮挡）',
     })[value] || value || '尚未捕获';
   }
 
@@ -67,13 +69,23 @@
     setMessage('正在生成采集诊断包……');
     const result = await command('douyin.visible.export_diagnostics', {}, 120);
     const path = String(result.path || '');
+    lastDiagnosticPath = path;
     const target = document.getElementById('douyin-diagnostics-path');
     if (target) target.textContent = path;
+    const openButton = document.getElementById('douyin-open-diagnostics-folder');
+    if (openButton) openButton.disabled = !path;
     try {
       if (path && navigator.clipboard) await navigator.clipboard.writeText(path);
     } catch (_) {}
     setMessage(`诊断包已生成：${path}${path ? '（路径已尝试复制）' : ''}`);
     toast('抖音采集诊断包已生成，可直接把 ZIP 文件上传到聊天中');
+  }
+
+  async function openDiagnosticsFolder() {
+    const path = lastDiagnosticPath || document.getElementById('douyin-diagnostics-path')?.textContent || '';
+    if (!path || path === '尚未导出') throw new Error('请先导出采集诊断包');
+    const result = await command('douyin.visible.open_diagnostics_folder', { path }, 30);
+    setMessage(`已打开诊断文件夹：${result.folder || path}`);
   }
 
   async function clearLocalHistory() {
@@ -114,7 +126,7 @@
         <button id="douyin-export-diagnostics" type="button" class="secondary">导出采集诊断包</button>
         <button id="douyin-clear-local-history" type="button" class="danger">清空本地测试显示</button>
       </div>
-      <div id="douyin-capture-diagnostics-message" class="diagnosis warn">尚未获取窗口截图。浏览器遮住直播伴侣时，旧版桌面 OCR 会误读浏览器；新版优先读取直播伴侣自身窗口表面。</div>
+      <div id="douyin-capture-diagnostics-message" class="diagnosis warn">尚未获取窗口截图。屏幕兜底现在按 OCR 互动区域的实际遮挡判断，不要求直播伴侣必须是前台窗口。</div>
       <div class="douyin-capture-preview-grid">
         <figure>
           <figcaption>直播伴侣窗口实际捕获内容</figcaption>
@@ -132,7 +144,10 @@
       </details>
       <details>
         <summary>诊断包位置</summary>
-        <code id="douyin-diagnostics-path" class="douyin-diagnostics-path">尚未导出</code>
+        <div class="douyin-diagnostics-location">
+          <code id="douyin-diagnostics-path" class="douyin-diagnostics-path">尚未导出</code>
+          <button id="douyin-open-diagnostics-folder" type="button" class="secondary" disabled>打开文件夹</button>
+        </div>
       </details>
     `;
     notes.insertAdjacentElement('beforebegin', section);
@@ -140,6 +155,7 @@
     bind('douyin-capture-preview', refreshPreview);
     bind('douyin-uia-probe', runProbe);
     bind('douyin-export-diagnostics', exportDiagnostics);
+    bind('douyin-open-diagnostics-folder', openDiagnosticsFolder);
     bind('douyin-clear-local-history', clearLocalHistory);
     return true;
   }
