@@ -2,38 +2,45 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import require_admin_token
 from app.auto_director_service import config_to_dict
 from app.db import get_db
-from app.douyin_live_service import collector_heartbeat, collector_status, ingest_open_live_data
-from app.models import AutoDirectorConfig, BrowserExtension
+from app.douyin_live_service import collector_heartbeat, collector_status, ingest_visible_events
+from app.models import AutoDirectorConfig, BridgeAgent, BrowserExtension
+from app.security import verify_token
 
-router = APIRouter(
-    prefix="/api/douyin-live",
-    tags=["douyin-live"],
-    dependencies=[Depends(require_admin_token)],
-)
+router = APIRouter(prefix="/api/douyin-live", tags=["douyin-live"])
 
 
-class DouyinHeartbeat(BaseModel):
+class VisibleCollectorHeartbeat(BaseModel):
+    bridge_id: str
     extension_id: str
-    collector_id: str = Field(default="douyin-live-companion", max_length=120)
+    collector_id: str = Field(default="douyin-visible-ui", max_length=120)
     connected: bool = True
-    mate_version: str | None = Field(default=None, max_length=80)
-    layout_mode: int | None = Field(default=None, ge=0, le=1)
-    plugin_version: str | None = Field(default=None, max_length=80)
-    error: str | None = Field(default=None, max_length=1000)
+    mode: str = Field(default="hybrid", pattern="^(hybrid|uia|ocr)$")
+    window_title: str | None = Field(default=None, max_length=300)
+    uia_available: bool | None = None
+    ocr_available: bool | None = None
+    active_source: str | None = Field(default=None, max_length=40)
+    error: str | None = Field(default=None, max_length=2000)
 
 
-class DouyinOpenLiveData(BaseModel):
+class VisibleCollectorBatch(BaseModel):
+    bridge_id: str
     extension_id: str
-    collector_id: str = Field(default="douyin-live-companion", max_length=120)
-    event_name: str = Field(default="OPEN_LIVE_DATA", max_length=100)
-    payload: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
+    collector_id: str = Field(default="douyin-visible-ui", max_length=120)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class VisibleCollectorAdminRequest(BaseModel):
+    extension_id: str
+    collector_id: str = Field(default="douyin-visible-simulator", max_length=120)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -47,45 +54,55 @@ def require_extension_and_config(db: Session, extension_id: str) -> tuple[Browse
     return extension, config
 
 
-@router.post("/heartbeat")
-def heartbeat(payload: DouyinHeartbeat, db: Session = Depends(get_db)) -> dict[str, Any]:
+def require_bridge(db: Session, bridge_id: str, token: str | None) -> BridgeAgent:
+    bridge = db.get(BridgeAgent, bridge_id)
+    if not bridge or not token or not verify_token(token, bridge.token_hash):
+        raise HTTPException(status_code=401, detail="Invalid bridge credentials")
+    return bridge
+
+
+@router.post("/bridge/heartbeat")
+def bridge_heartbeat(
+    payload: VisibleCollectorHeartbeat,
+    x_bridge_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    bridge = require_bridge(db, payload.bridge_id, x_bridge_token)
     require_extension_and_config(db, payload.extension_id)
     return collector_heartbeat(
         payload.extension_id,
         collector_id=payload.collector_id,
+        bridge_id=bridge.id,
         connected=payload.connected,
-        mate_version=payload.mate_version,
-        layout_mode=payload.layout_mode,
-        plugin_version=payload.plugin_version,
+        mode=payload.mode,
+        window_title=payload.window_title,
+        uia_available=payload.uia_available,
+        ocr_available=payload.ocr_available,
+        active_source=payload.active_source,
         error=payload.error,
     )
 
 
-@router.post("/ingest")
-def ingest(payload: DouyinOpenLiveData, db: Session = Depends(get_db)) -> dict[str, Any]:
+@router.post("/bridge/ingest")
+def bridge_ingest(
+    payload: VisibleCollectorBatch,
+    x_bridge_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    bridge = require_bridge(db, payload.bridge_id, x_bridge_token)
     _, config = require_extension_and_config(db, payload.extension_id)
-    if payload.event_name != "OPEN_LIVE_DATA":
-        raise HTTPException(status_code=422, detail="Only OPEN_LIVE_DATA is accepted")
-    if not payload.payload:
-        return {
-            "received": 0,
-            "accepted": 0,
-            "duplicates": 0,
-            "ignored": 0,
-            "failed": 0,
-            "events": [],
-        }
-    return ingest_open_live_data(
+    return ingest_visible_events(
         db,
         config,
         extension_id=payload.extension_id,
         collector_id=payload.collector_id,
-        items=payload.payload,
+        bridge_id=bridge.id,
+        items=payload.events,
         metadata=payload.metadata,
     )
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_admin_token)])
 def status(
     extension_id: str = Query(...),
     db: Session = Depends(get_db),
@@ -96,48 +113,47 @@ def status(
     return value
 
 
-@router.post("/simulate")
+@router.post("/simulate", dependencies=[Depends(require_admin_token)])
 def simulate(
-    payload: DouyinOpenLiveData,
+    payload: VisibleCollectorAdminRequest,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     _, config = require_extension_and_config(db, payload.extension_id)
-    items = payload.payload or [
+    events = payload.events or [
         {
-            "msg_id": "aliver-sim-comment-1",
-            "timestamp": 0,
-            "msg_type": 2,
-            "msg_type_str": "live_comment",
-            "sec_open_id": "debug-user",
-            "nickname": "抖音测试观众",
+            "event_id": "visible-sim-comment-1",
+            "event_type": "comment",
+            "user_name": "抖音测试观众",
             "content": "数字人直播是怎么实现的？",
+            "source": "uia",
+            "confidence": 1.0,
+            "raw_text": "抖音测试观众 数字人直播是怎么实现的？",
         },
         {
-            "msg_id": "aliver-sim-gift-1",
-            "timestamp": 1,
-            "msg_type": 3,
-            "msg_type_str": "live_gift",
-            "sec_open_id": "debug-gifter",
-            "nickname": "礼物测试观众",
-            "gift_name": "小心心",
-            "gift_num": 1,
-            "sec_gift_id": "debug-gift",
+            "event_id": "visible-sim-gift-1",
+            "event_type": "gift",
+            "user_name": "礼物测试观众",
+            "content": "送出了小心心 × 1",
+            "source": "ocr",
+            "confidence": 0.96,
+            "raw_text": "礼物测试观众 送出了小心心",
         },
         {
-            "msg_id": "aliver-sim-follow-1",
-            "timestamp": 2,
-            "msg_type": 5,
-            "msg_type_str": "live_follow",
-            "sec_open_id": "debug-follower",
-            "nickname": "新关注观众",
-            "user_follow_action": 1,
+            "event_id": "visible-sim-follow-1",
+            "event_type": "follow",
+            "user_name": "新关注观众",
+            "content": "关注了直播间",
+            "source": "uia",
+            "confidence": 1.0,
+            "raw_text": "新关注观众 关注了你",
         },
     ]
-    return ingest_open_live_data(
+    return ingest_visible_events(
         db,
         config,
         extension_id=payload.extension_id,
-        collector_id=payload.collector_id or "douyin-simulator",
-        items=items,
-        metadata={**payload.metadata, "simulated": True},
+        collector_id=payload.collector_id,
+        bridge_id=None,
+        items=events,
+        metadata={**payload.metadata, "simulated": True, "mode": "hybrid"},
     )
