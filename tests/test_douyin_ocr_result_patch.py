@@ -4,6 +4,7 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import numpy as np
+import pytest
 
 from bridge.douyin_ocr_result_patch import _as_sequence, _ocr_lines
 from bridge.douyin_visible_collector import DouyinVisibleCollectorManager
@@ -52,11 +53,5 @@ def test_ocr_lines_accepts_rapidocr_numpy_result(monkeypatch):
 
     assert len(rows) == 1
     assert rows[0]["text"] == "小雪 你好呀"
-    assert rows[0]["confidence"] == pytest_approx(0.93)
+    assert rows[0]["confidence"] == pytest.approx(0.93, abs=1e-5)
     assert rows[0]["bbox"] == [101.0, 202.0, 120.0, 212.0]
-
-
-def pytest_approx(value: float):
-    import pytest
-
-    return pytest.approx(value, abs=1e-5)
