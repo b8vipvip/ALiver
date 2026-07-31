@@ -110,3 +110,11 @@ install_live_welcome_patch()
 from app.live_welcome_ingest_patch import install_live_welcome_ingest_patch  # noqa: E402
 
 install_live_welcome_ingest_patch()
+
+# A preflight simulation must be able to validate the welcome pipeline without
+# permanently changing an emergency/stopped/paused production director run.
+from app.live_debug_director_recovery_patch import (  # noqa: E402
+    install_live_debug_director_recovery_patch,
+)
+
+install_live_debug_director_recovery_patch()
