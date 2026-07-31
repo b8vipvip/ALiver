@@ -7,9 +7,9 @@ def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_version_pair_is_bumped_for_live_operations_release():
-    assert '__version__ = "0.15.0"' in _read("app/__init__.py")
-    assert 'BRIDGE_VERSION = "0.11.0"' in _read("bridge/agent_sync.py")
+def test_version_pair_is_bumped_for_native_voice_release():
+    assert '__version__ = "0.15.1"' in _read("app/__init__.py")
+    assert 'BRIDGE_PATCH_VERSION = "0.11.1"' in _read("bridge/startup_retry_patch.py")
     assert '"version": "0.1.4"' in _read("chrome_extension/manifest.json")
 
 
@@ -26,7 +26,9 @@ def test_bootstrap_loader_wires_live_debug_and_operations_workspaces():
     assert "/static/audio_live_setup.js" in loader
     assert "/static/console_shell_v3.js" in loader
     assert "/static/live_run_console.js" in loader
-    assert "/static/voice_lab.js" in loader
+    assert "/static/native_voice_lab_v2.js" in loader
+    assert "/static/console_refinement_v4.js" in loader
+    assert "/static/voice_lab.js" not in loader
     assert "tab-simli-tuning" in layout
     assert "直播调试中心" in layout
     assert "开播前一键检查" in validation
@@ -36,7 +38,7 @@ def test_bootstrap_loader_wires_live_debug_and_operations_workspaces():
     assert "aliver.live_validation" in validation
 
 
-def test_live_audio_setup_exposes_lipsync_and_tts_commands():
+def test_live_audio_setup_exposes_lipsync_and_legacy_tts_commands():
     frontend = _read("app/static/audio_live_setup.js")
     bridge = _read("bridge/agent_sync.py")
 
@@ -51,8 +53,8 @@ def test_live_audio_setup_exposes_lipsync_and_tts_commands():
 def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
     patch = _read("app/static/wgc_hwnd_ui_patch.js")
 
-    assert "const EXPECTED_BRIDGE_VERSION = '0.11.0'" in patch
-    assert "const SERVER_VERSION = '0.15.0'" in patch
+    assert "const EXPECTED_BRIDGE_VERSION = '0.11.1'" in patch
+    assert "const SERVER_VERSION = '0.15.1'" in patch
     assert "new MutationObserver" in patch
     assert "queueMicrotask" in patch
     assert "setInterval(applyVersionState" not in patch
