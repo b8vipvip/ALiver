@@ -35,7 +35,6 @@
   const version = '0.14.4';
   const assets = [
     ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
-    ['/static/live_debug_validation.js', 'aliver-live-debug-validation'],
     ['/static/live_debug_validation_v2.js', 'aliver-live-debug-validation-v2'],
     ['/static/wgc_hwnd_ui_patch.js', 'aliver-wgc-hwnd-ui-patch'],
     ['/static/audio_live_setup.js', 'aliver-audio-live-setup'],
