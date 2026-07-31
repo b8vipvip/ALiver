@@ -24,6 +24,7 @@ from bridge.douyin_wgc_hwnd_patch import install_douyin_wgc_hwnd_patch
 from bridge.douyin_wgc_safe_fallback_patch import install_douyin_wgc_safe_fallback_patch
 from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
 from bridge.full_validation import run_full_validation
+from bridge.full_validation_v2 import run_staged_validation
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -37,7 +38,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.10.3"
+BRIDGE_VERSION = "0.10.4"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -100,6 +101,10 @@ def install() -> None:
             "douyin.visible.windows_graphics_capture.hwnd",
             "douyin.visible.screen_region_clear_fallback",
             "douyin.visible.channel_probe",
+            "douyin.visible.join_welcome",
+            "aliver.validation.preflight",
+            "aliver.validation.live",
+            "aliver.validation.levels",
             "aliver.full_validation",
             "provider.avatar.full_validation",
         ):
@@ -144,7 +149,22 @@ def install() -> None:
                 )
             elif command_type == "douyin.visible.electron_accessibility.restart":
                 result = await asyncio.to_thread(self.douyin_collector.restart_electron_accessibility)
-            elif command_type in {"aliver.full_validation", "provider.avatar.full_validation"}:
+            elif command_type == "aliver.preflight_validation":
+                result = await run_staged_validation(
+                    self,
+                    {**dict(payload or {}), "phase": "preflight"},
+                )
+            elif command_type == "aliver.live_validation":
+                result = await run_staged_validation(
+                    self,
+                    {**dict(payload or {}), "phase": "live"},
+                )
+            elif command_type == "aliver.full_validation":
+                result = await run_staged_validation(
+                    self,
+                    {**dict(payload or {}), "phase": str(payload.get("phase") or "preflight")},
+                )
+            elif command_type == "provider.avatar.full_validation":
                 result = await run_full_validation(self, dict(payload or {}))
             else:
                 result = await original_execute(self, command_type, payload)
