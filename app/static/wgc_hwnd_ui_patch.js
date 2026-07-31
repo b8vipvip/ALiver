@@ -1,6 +1,6 @@
 (() => {
-  const EXPECTED_BRIDGE_VERSION = '0.11.1';
-  const SERVER_VERSION = '0.15.1';
+  const EXPECTED_BRIDGE_VERSION = '0.12.0';
+  const SERVER_VERSION = '0.16.0';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -39,13 +39,13 @@
       } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
         setText(
           warning,
-          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本增加服务端等待重试和数字人会话自动恢复。`,
+          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本增加真实实时 DSP 语音处理。`,
         );
         setClass(warning, 'diagnosis bad');
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；窗口诊断、原生语音调音和会话自动恢复能力已启用。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；实时 DSP、窗口诊断和会话自动恢复能力已启用。`,
         );
         setClass(warning, 'diagnosis good');
       }

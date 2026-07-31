@@ -35,6 +35,7 @@ jobs:
       - run: node --check app/static/console_refinement_v4.js
       - run: node --check app/static/live_run_console.js
       - run: node --check app/static/native_voice_lab_v2.js
+      - run: node --check app/static/realtime_voice_dsp_ui_patch.js
       - run: node --check app/static/live_debug_validation.js
       - run: node --check app/static/live_debug_validation_v2.js
       - run: node --check app/static/live_debug_recovery_ui.js
@@ -49,7 +50,7 @@ jobs:
       - run: node --check app/static/vtube_motion_wizard.js
       - run: node --check app/static/vtube_motion_controls_fix.js
       - run: node --check app/static/avatar_action_runtime.js
-      - run: python -m py_compile bridge/douyin_visible_collector.py bridge/douyin_visible_runtime_patch.py bridge/douyin_ocr_result_patch.py bridge/douyin_window_capture_patch.py bridge/douyin_region_occlusion_patch.py bridge/douyin_three_channel_patch.py bridge/douyin_wgc_hwnd_patch.py bridge/douyin_wgc_safe_fallback_patch.py bridge/douyin_three_channel_config_patch.py bridge/douyin_validation_fix.py bridge/full_validation.py bridge/full_validation_v2.py bridge/live_debug_defaults.py bridge/live_debug_recovery_patch.py bridge/audio_live_setup.py bridge/douyin_scan_logging_patch.py bridge/voice_tts.py bridge/startup_retry_patch.py app/live_welcome_patch.py app/live_welcome_ingest_patch.py app/live_debug_director_recovery_patch.py app/live_run_service.py app/voice_service.py app/voice_director_patch.py app/native_voice_tuning.py app/bridge_session_restore_patch.py app/api/live_runs.py app/api/voice.py app/api/native_voice.py
+      - run: python -m py_compile bridge/douyin_visible_collector.py bridge/douyin_visible_runtime_patch.py bridge/douyin_ocr_result_patch.py bridge/douyin_window_capture_patch.py bridge/douyin_region_occlusion_patch.py bridge/douyin_three_channel_patch.py bridge/douyin_wgc_hwnd_patch.py bridge/douyin_wgc_safe_fallback_patch.py bridge/douyin_three_channel_config_patch.py bridge/douyin_validation_fix.py bridge/full_validation.py bridge/full_validation_v2.py bridge/live_debug_defaults.py bridge/live_debug_recovery_patch.py bridge/audio_live_setup.py bridge/realtime_voice_dsp.py bridge/douyin_scan_logging_patch.py bridge/voice_tts.py bridge/startup_retry_patch.py app/live_welcome_patch.py app/live_welcome_ingest_patch.py app/live_debug_director_recovery_patch.py app/live_run_service.py app/voice_service.py app/voice_director_patch.py app/native_voice_tuning.py app/bridge_session_restore_patch.py app/api/live_runs.py app/api/voice.py app/api/native_voice.py
       - run: python -m pip install --quiet --upgrade pip
       - run: pip install --quiet -e ".[dev]"
       - run: ruff check app bridge tests

@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.15.0"
+version = "0.16.0"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,6 +17,7 @@ dependencies = [
   "websockets>=14,<16",
   "numpy>=1.26,<3",
   "PyAudioWPatch>=0.2.12.8,<0.3; sys_platform == 'win32'",
+  "pedalboard>=0.9.24,<1.0; sys_platform == 'win32'",
   "opencv-python>=4.10,<5.0; sys_platform == 'win32'",
   "pywinauto>=0.6.9,<0.7; sys_platform == 'win32'",
   "pywin32>=306,<400; sys_platform == 'win32'",
@@ -55,6 +56,7 @@ ignore = ["B008"]
 "app/voice_service.py" = ["E501", "F401", "UP012"]
 "app/api/voice.py" = ["E501"]
 "bridge/audio_capture.py" = ["F841"]
+"bridge/realtime_voice_dsp.py" = ["E501", "F401"]
 "bridge/voice_tts.py" = ["E501"]
 "bridge/runtime_diagnostics.py" = ["I001"]
 "bridge/douyin_visible_collector.py" = ["E501", "I001"]

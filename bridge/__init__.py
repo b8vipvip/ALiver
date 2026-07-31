@@ -1,5 +1,6 @@
 """ALiver Windows Bridge package initialization."""
 
+from bridge.audio_device_family_patch import install_audio_device_family_patch
 from bridge.avatar_action_control import install_avatar_action_control_patch
 from bridge.avatar_action_duration_fix import install_avatar_action_duration_fix
 from bridge.control_guard_install_patch import install_control_guard_install_patch
@@ -14,6 +15,7 @@ from bridge.vtube_motion_v2 import install_vtube_motion_v2_patch
 from bridge.vtube_studio_auth_fix import install_vtube_studio_auth_fix
 
 install_bridge_fast_startup_patch()
+install_audio_device_family_patch()
 install_live_debug_defaults()
 install_vtube_studio_auth_fix()
 install_vtube_motion_patch()

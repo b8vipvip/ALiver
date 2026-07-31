@@ -25,6 +25,7 @@ from bridge.douyin_wgc_safe_fallback_patch import install_douyin_wgc_safe_fallba
 from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
 from bridge.full_validation import run_full_validation
 from bridge.full_validation_v2 import run_staged_validation
+from bridge.realtime_voice_dsp import RealtimeVoiceDSPManager
 from bridge.runtime_diagnostics import (
     create_support_bundle,
     current_paths,
@@ -39,7 +40,7 @@ from bridge.runtime_diagnostics import (
 from bridge.single_instance import try_acquire_bridge_lock
 from bridge.voice_tts import download_and_play_tts
 
-BRIDGE_VERSION = "0.11.0"
+BRIDGE_VERSION = "0.12.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -52,15 +53,25 @@ def _live_audio_manager(agent_instance: Any) -> LiveAudioSetupManager:
     return manager
 
 
+def _voice_dsp_manager(agent_instance: Any) -> RealtimeVoiceDSPManager:
+    manager = getattr(agent_instance, "realtime_voice_dsp", None)
+    if manager is None:
+        manager = RealtimeVoiceDSPManager(agent_instance)
+        agent_instance.realtime_voice_dsp = manager
+    return manager
+
+
 def _session_summary(agent_instance: Any) -> dict[str, Any]:
     vtube = getattr(agent_instance, "vtube_studio", None)
     collector = getattr(agent_instance, "douyin_collector", None)
     live_audio = getattr(agent_instance, "live_audio_setup", None)
+    voice_dsp = getattr(agent_instance, "realtime_voice_dsp", None)
     return {
         "bridge_connected": not agent_instance.stop_event.is_set(),
         "vtube_studio_sessions": vtube.status() if vtube is not None else {},
         "douyin_visible_collector": collector.status() if collector is not None else None,
         "live_audio_setup": live_audio.status() if live_audio is not None else None,
+        "realtime_voice_dsp": voice_dsp.status() if voice_dsp is not None else None,
     }
 
 
@@ -94,6 +105,14 @@ def install() -> None:
             "audio.live.status",
             "audio.live.stop",
             "audio.gpt_out.play_tts",
+            "audio.dsp.devices",
+            "audio.dsp.configure",
+            "audio.dsp.start",
+            "audio.dsp.stop",
+            "audio.dsp.status",
+            "audio.dsp.bypass",
+            "audio.dsp.record_compare",
+            "voice.realtime_dsp",
             "voice.api_tts",
             "provider.vtube_studio.audio_mouth_fallback",
             "douyin.visible.region_occlusion_guard",
@@ -133,6 +152,29 @@ def install() -> None:
                 result = _live_audio_manager(self).status()
             elif command_type == "audio.live.stop":
                 result = await _live_audio_manager(self).stop()
+            elif command_type == "audio.dsp.devices":
+                result = await asyncio.to_thread(_voice_dsp_manager(self).devices)
+            elif command_type == "audio.dsp.configure":
+                result = await asyncio.to_thread(
+                    _voice_dsp_manager(self).configure,
+                    dict(payload or {}),
+                )
+            elif command_type == "audio.dsp.start":
+                result = await asyncio.to_thread(
+                    _voice_dsp_manager(self).start,
+                    dict(payload or {}),
+                )
+            elif command_type == "audio.dsp.stop":
+                result = await asyncio.to_thread(_voice_dsp_manager(self).stop)
+            elif command_type == "audio.dsp.status":
+                result = _voice_dsp_manager(self).status()
+            elif command_type == "audio.dsp.bypass":
+                result = _voice_dsp_manager(self).set_bypass(bool(payload.get("bypass", True)))
+            elif command_type == "audio.dsp.record_compare":
+                result = await asyncio.to_thread(
+                    _voice_dsp_manager(self).record_compare,
+                    float(payload.get("seconds") or 10.0),
+                )
             elif command_type == "audio.gpt_out.play_tts":
                 result = await download_and_play_tts(self, dict(payload or {}))
             elif command_type == "bridge.diagnostics.paths":
@@ -228,6 +270,9 @@ async def main() -> None:
         finally:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
+            voice_dsp = getattr(instance, "realtime_voice_dsp", None)
+            if voice_dsp is not None:
+                await asyncio.to_thread(voice_dsp.shutdown)
             live_audio = getattr(instance, "live_audio_setup", None)
             if live_audio is not None:
                 await live_audio.stop()
