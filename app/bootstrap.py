@@ -32,4 +32,14 @@ async def disable_console_asset_cache(request, call_next):
 
 
 if __name__ == "__main__":
-    uvicorn.run(application, host=settings.host, port=settings.port, reload=False)
+    # The console polls several local status endpoints. Uvicorn's access log
+    # would print every poll and make the Windows terminal appear to refresh
+    # continuously, while ALiver still records application warnings/errors.
+    uvicorn.run(
+        application,
+        host=settings.host,
+        port=settings.port,
+        reload=False,
+        access_log=False,
+        log_level="info",
+    )
