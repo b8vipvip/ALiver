@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '0.15.1-hotfix2';
+  const VERSION = '0.15.1-hotfix3';
   const STABILIZE_DELAYS = [0, 80, 220, 600, 1400];
 
   function injectStyle() {

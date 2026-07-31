@@ -70,16 +70,9 @@
   overflow: hidden;
 }
 
-/*
- * The legacy console has several grid rules for tab panels. Once providers are
- * embedded into the session workspace, any stale grid placement can push the
- * whole page into a phantom second column. Reset the top-level panel and every
- * direct child to one normal full-width flow.
- */
-.aliver-workspace > #tab-sessions,
-.aliver-workspace > #tab-sessions.active,
-#tab-sessions.avatar-session-workspace {
-  display: block !important;
+/* Keep the sessions workspace full-width only while its primary tab is active. */
+.aliver-workspace > #tab-sessions {
+  display: none !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: 1600px !important;
@@ -87,6 +80,11 @@
   grid-column: 1 / -1 !important;
   transform: none !important;
   overflow: visible;
+}
+
+.aliver-workspace > #tab-sessions.active,
+#tab-sessions.avatar-session-workspace.active {
+  display: block !important;
 }
 
 #tab-sessions.avatar-session-workspace > * {
