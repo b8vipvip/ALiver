@@ -2,12 +2,14 @@
 
 from bridge.avatar_action_control import install_avatar_action_control_patch
 from bridge.avatar_action_duration_fix import install_avatar_action_duration_fix
+from bridge.live_debug_defaults import install_live_debug_defaults
 from bridge.vtube_motion import install_vtube_motion_patch
 from bridge.vtube_motion_control import install_vtube_motion_control_patch
 from bridge.vtube_motion_safety import install_vtube_motion_safety_patch
 from bridge.vtube_motion_v2 import install_vtube_motion_v2_patch
 from bridge.vtube_studio_auth_fix import install_vtube_studio_auth_fix
 
+install_live_debug_defaults()
 install_vtube_studio_auth_fix()
 install_vtube_motion_patch()
 install_vtube_motion_safety_patch()

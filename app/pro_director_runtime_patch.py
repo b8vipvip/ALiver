@@ -97,3 +97,16 @@ pro_director_service._base_context = safe_base_context
 pro_director_service.ai_director_decision = guarded_ai_director_decision
 pro_director_service.apply_decision_state = guarded_apply_decision_state
 pro_director_service.control_run = guarded_control_run
+
+# Install after the closing guard so the welcome patch composes with the existing
+# one-shot closing protection and is what auto_director_service imports.
+from app.live_welcome_patch import install_live_welcome_patch  # noqa: E402
+
+install_live_welcome_patch()
+
+# Import and patch the event scorer before douyin_live_service imports score_event
+# by value. This guarantees viewer-entry events reach the director even when the
+# configured minimum score is higher than the old generic system-event score.
+from app.live_welcome_ingest_patch import install_live_welcome_ingest_patch  # noqa: E402
+
+install_live_welcome_ingest_patch()
