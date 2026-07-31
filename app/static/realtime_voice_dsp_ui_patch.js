@@ -37,6 +37,21 @@
     box.textContent = message;
   }
 
+  function showAutomaticEndpoints(input, output) {
+    setSelectAsAutomatic(
+      document.getElementById('dsp-input'),
+      input,
+      'CABLE Output 原声录音端',
+    );
+    setSelectAsAutomatic(
+      document.getElementById('dsp-output'),
+      output,
+      'CABLE-B Input 处理后写入端',
+    );
+    setLabel(document.getElementById('dsp-input'), '原声音频输入（自动配置）');
+    setLabel(document.getElementById('dsp-output'), '处理后输出（自动配置）');
+  }
+
   async function connectedBridge() {
     const rows = await api('/api/bridges');
     const online = rows.filter(row => row.connected === true);
@@ -59,7 +74,23 @@
     busy = true;
     try {
       const bridgeId = await connectedBridge();
-      let data = await sendBridgeCommand(bridgeId, 'audio.dsp.devices', {}, 30);
+      const liveStatus = await sendBridgeCommand(bridgeId, 'audio.dsp.status', {}, 10);
+
+      // PortAudio device enumeration must not run while the realtime stream is
+      // active. Use the already-resolved endpoints from the running status.
+      if (liveStatus.running) {
+        showAutomaticEndpoints(liveStatus.input_device, liveStatus.output_device);
+        const start = document.getElementById('dsp-start');
+        const apply = document.getElementById('dsp-apply');
+        if (start) start.disabled = false;
+        if (apply) apply.disabled = false;
+        if (showMessage) {
+          resultBox('DSP 正在运行，已沿用锁定的标准 CABLE → CABLE-B 路由；未重新扫描音频设备。');
+        }
+        return { bridgeId, data: { status: liveStatus } };
+      }
+
+      const data = await sendBridgeCommand(bridgeId, 'audio.dsp.devices', {}, 30);
       const raw = pairByFamily(data, 'vb-cable');
       const gptIn = pairByFamily(data, 'vb-cable-a');
       const processed = pairByFamily(data, 'vb-cable-b');
@@ -76,25 +107,20 @@
         gpt_out_capture_key: raw.loopback.key,
         gpt_in_playback_key: gptIn.playback.key,
       }, 30);
-      await sendBridgeCommand(bridgeId, 'audio.dsp.configure', {
+      const configured = await sendBridgeCommand(bridgeId, 'audio.dsp.configure', {
         input_device_key: raw.microphone.key,
         output_device_key: processed.playback.key,
       }, 30);
 
-      data = await sendBridgeCommand(bridgeId, 'audio.dsp.devices', {}, 30);
-      setSelectAsAutomatic(document.getElementById('dsp-input'), raw.microphone, 'CABLE Output 原声录音端');
-      setSelectAsAutomatic(document.getElementById('dsp-output'), processed.playback, 'CABLE-B Input 处理后写入端');
-      setLabel(document.getElementById('dsp-input'), '原声音频输入（自动配置）');
-      setLabel(document.getElementById('dsp-output'), '处理后输出（自动配置）');
-
+      showAutomaticEndpoints(raw.microphone, processed.playback);
       const start = document.getElementById('dsp-start');
       const apply = document.getElementById('dsp-apply');
       if (start) start.disabled = false;
       if (apply) apply.disabled = false;
-      if (showMessage && !data.status?.running) {
+      if (showMessage) {
         resultBox('三线音频路由已自动配置：标准 CABLE 接收 ChatGPT 原声，CABLE-A 专用于 GPT_IN，CABLE-B 输出 DSP 处理后声音。');
       }
-      return { bridgeId, data, raw, gptIn, processed };
+      return { bridgeId, data: { ...data, status: configured }, raw, gptIn, processed };
     } catch (error) {
       resultBox(error.message, false);
       const start = document.getElementById('dsp-start');
@@ -127,12 +153,18 @@
     button.disabled = true;
     button.textContent = '录制中 10 秒…';
     try {
-      const route = await autoConfigure(false);
-      const status = await sendBridgeCommand(route.bridgeId, 'audio.dsp.status', {}, 10);
+      const bridgeId = await connectedBridge();
+      const status = await sendBridgeCommand(bridgeId, 'audio.dsp.status', {}, 10);
       if (!status.running) throw new Error('请先启动实时 DSP，再录制 A/B 对比。');
+      showAutomaticEndpoints(status.input_device, status.output_device);
       box.className = 'dsp-ab-result diagnosis warn';
-      box.textContent = '录制已开始，请马上到 ChatGPT 点击“更多操作 → 朗读”。';
-      const result = await sendBridgeCommand(route.bridgeId, 'audio.dsp.record_compare', { seconds: 10 }, 35);
+      box.textContent = '录制已开始，请马上到 ChatGPT 点击“更多操作 → 朗读”。录制期间不会扫描或重启音频设备。';
+      const result = await sendBridgeCommand(
+        bridgeId,
+        'audio.dsp.record_compare',
+        { seconds: 10 },
+        45,
+      );
       renderRecording(result);
       if (typeof toast === 'function') toast('原声与处理后 WAV 已保存');
     } catch (error) {
