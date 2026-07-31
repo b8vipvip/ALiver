@@ -26,6 +26,16 @@ def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
     assert "aliver.full_validation" in validation
 
 
+def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
+    patch = _read("app/static/wgc_hwnd_ui_patch.js")
+
+    assert "const EXPECTED_BRIDGE_VERSION = '0.10.3'" in patch
+    assert "const SERVER_VERSION = '0.14.3'" in patch
+    assert "new MutationObserver" in patch
+    assert "queueMicrotask" in patch
+    assert "setInterval(applyVersionState" not in patch
+
+
 def test_director_and_collector_are_rehomed_by_layout_controller():
     layout = _read("app/static/console_layout_v2.js")
 
