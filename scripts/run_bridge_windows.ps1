@@ -8,20 +8,9 @@ if (-not (Test-Path $pythonExe)) {
     throw ".venv was not found. Run .\scripts\setup_windows.ps1 first."
 }
 
-$existing = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -match '^python(w)?\.exe$' -and
-    $_.CommandLine -and
-    ($_.CommandLine -match 'bridge\.agent_sync' -or $_.CommandLine -match 'bridge[\\/]agent_sync\.py')
-}
-if ($existing) {
-    Write-Host "检测到已有 ALiver Bridge 进程，禁止重复启动：" -ForegroundColor Yellow
-    $existing | ForEach-Object {
-        Write-Host "  PID=$($_.ProcessId)  $($_.CommandLine)" -ForegroundColor Yellow
-    }
-    Write-Host "请先关闭旧 Bridge 窗口，或运行：.\scripts\stop_bridge_windows.ps1" -ForegroundColor Yellow
-    exit 0
-}
-
+# Do not enumerate every Win32_Process through WMI here. On some Windows
+# machines that query takes many seconds. bridge.agent_sync already owns a
+# cross-process lock and will immediately reject a duplicate Bridge safely.
 $logDir = Join-Path $projectRoot "bridge\logs\console"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -34,12 +23,11 @@ $env:OPENCV_OPENCL_RUNTIME = "disabled"
 $env:OMP_NUM_THREADS = "1"
 
 Write-Host "Bridge 控制台日志：$consoleLog"
+Write-Host "正在启动 ALiver Bridge；单实例检查由 Bridge 内部锁完成……" -ForegroundColor Cyan
 
 # Windows PowerShell 5.1 wraps every native-process stderr line as an
-# ErrorRecord. RapidOCR writes normal INFO startup messages to stderr, so the
-# script-wide ErrorActionPreference=Stop used to terminate Bridge even though
-# Python had not failed. Keep strict handling for the rest of the launcher, but
-# treat native stderr as ordinary console text and use Python's real exit code.
+# ErrorRecord. RapidOCR writes normal INFO startup messages to stderr, so keep
+# native stderr as ordinary console text and use Python's real exit code.
 $previousErrorActionPreference = $ErrorActionPreference
 try {
     $ErrorActionPreference = "Continue"
