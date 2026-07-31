@@ -38,7 +38,7 @@ from bridge.runtime_diagnostics import (
 )
 from bridge.single_instance import try_acquire_bridge_lock
 
-BRIDGE_VERSION = "0.10.4"
+BRIDGE_VERSION = "0.10.5"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -99,12 +99,15 @@ def install() -> None:
             "douyin.visible.electron_accessibility",
             "douyin.visible.windows_graphics_capture",
             "douyin.visible.windows_graphics_capture.hwnd",
+            "douyin.visible.window_selection.v2",
+            "douyin.visible.capture_freshness",
             "douyin.visible.screen_region_clear_fallback",
             "douyin.visible.channel_probe",
             "douyin.visible.join_welcome",
             "aliver.validation.preflight",
             "aliver.validation.live",
             "aliver.validation.levels",
+            "aliver.validation.auto_start_collector",
             "aliver.full_validation",
             "provider.avatar.full_validation",
         ):
