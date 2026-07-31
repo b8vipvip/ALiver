@@ -70,6 +70,45 @@
   overflow: hidden;
 }
 
+/*
+ * The legacy console has several grid rules for tab panels. Once providers are
+ * embedded into the session workspace, any stale grid placement can push the
+ * whole page into a phantom second column. Reset the top-level panel and every
+ * direct child to one normal full-width flow.
+ */
+.aliver-workspace > #tab-sessions,
+.aliver-workspace > #tab-sessions.active,
+#tab-sessions.avatar-session-workspace {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 1600px !important;
+  margin: 0 auto !important;
+  grid-column: 1 / -1 !important;
+  transform: none !important;
+  overflow: visible;
+}
+
+#tab-sessions.avatar-session-workspace > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  grid-column: 1 / -1 !important;
+}
+
+#tab-sessions .avatar-session-subpanel {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+#tab-sessions .avatar-session-subpanel[hidden] {
+  display: none !important;
+}
+
 .avatar-session-switcher {
   display: flex;
   flex-wrap: wrap;
@@ -95,12 +134,8 @@
   background: rgba(74, 149, 255, .14);
 }
 
-.avatar-session-subpanel[hidden] {
-  display: none !important;
-}
-
-#avatar-provider-subpanel,
-#avatar-provider-subpanel.embedded-provider-panel {
+#avatar-provider-subpanel:not([hidden]),
+#avatar-provider-subpanel.embedded-provider-panel:not([hidden]) {
   display: block;
   min-width: 0;
 }
@@ -111,6 +146,8 @@
 
 #avatar-provider-subpanel .workspace-split,
 #avatar-session-main .workspace-split {
+  width: 100%;
+  min-width: 0;
   grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr) !important;
 }
 
