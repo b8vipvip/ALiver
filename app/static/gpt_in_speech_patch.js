@@ -32,7 +32,7 @@
 })();
 
 (() => {
-  const version = '0.14.5';
+  const version = '0.15.0';
   const assets = [
     ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
     ['/static/live_debug_validation_v2.js', 'aliver-live-debug-validation-v2'],
@@ -43,6 +43,9 @@
     ['/static/diagnostics_zh.js', 'aliver-diagnostics-zh'],
     ['/static/provider_catalog.js', 'aliver-provider-catalog-script'],
     ['/static/auto_director_refresh_fix.js', 'aliver-auto-director-refresh-fix'],
+    ['/static/console_shell_v3.js', 'aliver-console-shell-v3'],
+    ['/static/live_run_console.js', 'aliver-live-run-console'],
+    ['/static/voice_lab.js', 'aliver-voice-lab'],
   ];
 
   for (const [src, id] of assets) {
