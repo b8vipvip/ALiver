@@ -65,11 +65,15 @@ def _capture_target_window(self: Any, window: Any):
 def install_douyin_wgc_safe_fallback_patch() -> None:
     global _BASE_CAPTURE_TARGET
     manager = collector.DouyinVisibleCollectorManager
-    if getattr(manager, "_aliver_wgc_safe_fallback_patch", False):
-        return
+    if not getattr(manager, "_aliver_wgc_safe_fallback_patch", False):
+        _BASE_CAPTURE_TARGET = window_capture._capture_target_window
+        window_capture._capture_target_window = _capture_target_window
+        three_channel._capture_target_window = _capture_target_window
+        manager._capture_target_window = _capture_target_window
+        manager._aliver_wgc_safe_fallback_patch = True
 
-    _BASE_CAPTURE_TARGET = window_capture._capture_target_window
-    window_capture._capture_target_window = _capture_target_window
-    three_channel._capture_target_window = _capture_target_window
-    manager._capture_target_window = _capture_target_window
-    manager._aliver_wgc_safe_fallback_patch = True
+    # Install only after the complete WGC -> PrintWindow -> safe screen chain is
+    # assembled, so freshness tracking and visible-HWND selection wrap the final path.
+    from bridge.live_debug_recovery_patch import install_live_debug_recovery_patch
+
+    install_live_debug_recovery_patch()
