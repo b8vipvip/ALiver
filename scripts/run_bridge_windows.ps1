@@ -11,7 +11,7 @@ if (-not (Test-Path $pythonExe)) {
 # Python writes UTF-8 while Windows PowerShell 5.1 otherwise decodes native
 # pipeline output with the current OEM code page. Keep console text and the
 # Tee-Object stream in the same encoding so Chinese diagnostics are readable.
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 [Console]::InputEncoding = $utf8NoBom
 [Console]::OutputEncoding = $utf8NoBom
 $global:OutputEncoding = $utf8NoBom
