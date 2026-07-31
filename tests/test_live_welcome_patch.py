@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from app import auto_director_service
 from app.live_welcome_patch import is_viewer_join, welcome_allowed, welcome_decision
 
 
@@ -12,6 +13,19 @@ def test_viewer_join_is_distinct_from_other_system_messages():
     assert is_viewer_join(join) is True
     assert is_viewer_join(follow) is False
     assert is_viewer_join(fans) is False
+
+
+def test_join_event_is_queued_even_with_high_min_score():
+    status, score, reason = auto_director_service.score_event(
+        "system",
+        "小雪",
+        "进入了直播间",
+        {"min_score": 95, "max_comment_chars": 300, "blocked_keywords": []},
+    )
+
+    assert status == "queued"
+    assert score >= 80
+    assert "欢迎" in reason
 
 
 def test_welcome_decision_mentions_nickname_and_uses_wave():
