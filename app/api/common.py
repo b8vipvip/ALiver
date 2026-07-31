@@ -45,6 +45,8 @@ def session_to_out(row: AvatarSession, provider: ProviderConfig | None = None) -
 
 
 def bridge_to_out(row: BridgeAgent, connected: bool) -> BridgeOut:
+    # Database status can remain "online" after an unclean server/Bridge stop.
+    # The active WebSocket hub is the only authoritative live connection state.
     return BridgeOut(
         id=row.id,
         name=row.name,
@@ -52,7 +54,7 @@ def bridge_to_out(row: BridgeAgent, connected: bool) -> BridgeOut:
         version=row.version,
         capabilities=loads(row.capabilities_json, []),
         metadata=loads(row.metadata_json, {}),
-        status="online" if connected else row.status,
+        status="online" if connected else "offline",
         connected=connected,
         last_seen_at=row.last_seen_at,
         created_at=row.created_at,
