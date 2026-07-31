@@ -37,8 +37,9 @@ from bridge.runtime_diagnostics import (
     start_runtime_logging,
 )
 from bridge.single_instance import try_acquire_bridge_lock
+from bridge.voice_tts import download_and_play_tts
 
-BRIDGE_VERSION = "0.10.5"
+BRIDGE_VERSION = "0.11.0"
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
@@ -92,6 +93,8 @@ def install() -> None:
             "audio.live.auto_configure",
             "audio.live.status",
             "audio.live.stop",
+            "audio.gpt_out.play_tts",
+            "voice.api_tts",
             "provider.vtube_studio.audio_mouth_fallback",
             "douyin.visible.region_occlusion_guard",
             "douyin.visible.open_diagnostics_folder",
@@ -130,6 +133,8 @@ def install() -> None:
                 result = _live_audio_manager(self).status()
             elif command_type == "audio.live.stop":
                 result = await _live_audio_manager(self).stop()
+            elif command_type == "audio.gpt_out.play_tts":
+                result = await download_and_play_tts(self, dict(payload or {}))
             elif command_type == "bridge.diagnostics.paths":
                 result = current_paths()
             elif command_type == "bridge.diagnostics.bundle":

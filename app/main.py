@@ -20,9 +20,11 @@ from app.api import (
     director,
     douyin_live,
     health,
+    live_runs,
     logs,
     providers,
     sessions,
+    voice,
 )
 from app.auto_director_service import auto_director_worker
 from app.avatar_action_service import schedule_chatgpt_status
@@ -32,10 +34,12 @@ from app.db import SessionLocal, init_db
 from app.director_service import dispatch_queued, requeue_dispatched
 from app.extension_hub import extension_hub
 from app.json_utils import dumps, loads
+from app.live_run_service import live_run_recorder, live_run_worker
 from app.log_service import write_log
 from app.models import BridgeAgent, BrowserExtension, DirectorCommand, ProviderConfig
 from app.security import encrypt_json, verify_token
 from app.session_reconciliation import reconcile_bridge_sessions
+from app.voice_service import handle_assistant_completed
 
 settings = get_settings()
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -66,10 +70,16 @@ async def lifespan(app: FastAPI):
             )
     auto_director_stop = asyncio.Event()
     auto_director_task = asyncio.create_task(auto_director_worker(auto_director_stop))
+    live_run_stop = asyncio.Event()
+    live_run_task = asyncio.create_task(live_run_worker(live_run_stop))
     logger.info("ALiver started on %s:%s", settings.host, settings.port)
     yield
     auto_director_stop.set()
-    await auto_director_task
+    live_run_stop.set()
+    await asyncio.gather(auto_director_task, live_run_task, return_exceptions=True)
+    with SessionLocal() as db:
+        if live_run_recorder.status().get("active"):
+            live_run_recorder.stop(db, reason="server_shutdown")
     logger.info("ALiver stopping")
 
 
@@ -88,6 +98,8 @@ app.include_router(bridges.router)
 app.include_router(director.router)
 app.include_router(auto_director.router)
 app.include_router(douyin_live.router)
+app.include_router(live_runs.router)
+app.include_router(voice.router)
 app.include_router(logs.router)
 app.include_router(dashboard.router)
 
@@ -217,6 +229,27 @@ async def extension_websocket(
             message = await websocket.receive_json()
             message_type = message.get("type")
             now = datetime.now(timezone.utc)
+            if message_type == "assistant.completed":
+                data = message.get("data") or {}
+                live_run_recorder.record_external(
+                    "chatgpt.assistant.completed",
+                    {
+                        "extension_id": extension_id,
+                        "message_id": data.get("message_id"),
+                        "text": data.get("text"),
+                        "url": data.get("url"),
+                        "observed_at": data.get("observed_at"),
+                    },
+                )
+                asyncio.create_task(handle_assistant_completed(extension_id, dict(data)))
+                await websocket.send_json(
+                    {
+                        "type": "assistant.completed.ack",
+                        "message_id": data.get("message_id"),
+                        "at": now.isoformat(),
+                    }
+                )
+                continue
             with SessionLocal() as db:
                 extension = db.get(BrowserExtension, extension_id)
                 if not extension:
