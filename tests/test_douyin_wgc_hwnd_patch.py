@@ -67,3 +67,32 @@ def test_exact_window_printwindow_fallback_does_not_enable_desktop_capture(monke
     assert pixels == (50, 20, 40, 40)
     assert manager._state["capture_safety"] == "printwindow_exact_hwnd_surface"
     assert manager._state["capture_foreground_required"] is False
+
+
+def test_disabled_electron_accessibility_skips_second_uia_traversal(monkeypatch):
+    calls = []
+    manager = SimpleNamespace(_uia_lines=lambda _window: calls.append("uia") or [])
+    monkeypatch.setattr(
+        patch.three_channel,
+        "electron_accessibility_status",
+        lambda _manager: {"enabled": False},
+    )
+
+    assert patch._safe_electron_accessibility_lines(manager, SimpleNamespace()) == []
+    assert calls == []
+
+
+def test_enabled_electron_accessibility_reuses_first_level_uia(monkeypatch):
+    manager = SimpleNamespace(
+        _uia_lines=lambda _window: [{"text": "用户：你好", "confidence": 1.0}],
+    )
+    monkeypatch.setattr(
+        patch.three_channel,
+        "electron_accessibility_status",
+        lambda _manager: {"enabled": True},
+    )
+
+    rows = patch._safe_electron_accessibility_lines(manager, SimpleNamespace())
+
+    assert rows[0]["source"] == "electron_accessibility"
+    assert rows[0]["forced_accessibility"] is True
