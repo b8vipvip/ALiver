@@ -35,6 +35,7 @@ jobs:
       - run: node --check app/static/console_refinement_v4.js
       - run: node --check app/static/live_run_console.js
       - run: node --check app/static/native_voice_lab_v2.js
+      - run: node --check app/static/realtime_voice_dsp_ui_patch.js
       - run: node --check app/static/live_debug_validation.js
       - run: node --check app/static/live_debug_validation_v2.js
       - run: node --check app/static/live_debug_recovery_ui.js
