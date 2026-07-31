@@ -32,7 +32,7 @@
 })();
 
 (() => {
-  const version = '0.15.1-hotfix3';
+  const version = '0.16.0';
   const assets = [
     ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
     ['/static/live_debug_validation_v2.js', 'aliver-live-debug-validation-v2'],
