@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from bridge import agent
+from bridge.audio_live_setup import LiveAudioSetupManager
 from bridge.control_channel import install_bridge_control_guard
 from bridge.domestic_provider_scaffolds import (
     DOMESTIC_PROVIDER_TYPES,
@@ -41,13 +42,23 @@ BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_LOCK_PATH = BASE_DIR / "logs" / "bridge.instance.lock"
 
 
+def _live_audio_manager(agent_instance: Any) -> LiveAudioSetupManager:
+    manager = getattr(agent_instance, "live_audio_setup", None)
+    if manager is None:
+        manager = LiveAudioSetupManager(agent_instance)
+        agent_instance.live_audio_setup = manager
+    return manager
+
+
 def _session_summary(agent_instance: Any) -> dict[str, Any]:
     vtube = getattr(agent_instance, "vtube_studio", None)
     collector = getattr(agent_instance, "douyin_collector", None)
+    live_audio = getattr(agent_instance, "live_audio_setup", None)
     return {
         "bridge_connected": not agent_instance.stop_event.is_set(),
         "vtube_studio_sessions": vtube.status() if vtube is not None else {},
         "douyin_visible_collector": collector.status() if collector is not None else None,
+        "live_audio_setup": live_audio.status() if live_audio is not None else None,
     }
 
 
@@ -77,6 +88,10 @@ def install() -> None:
             "bridge.control.serialized_send",
             "bridge.diagnostics.paths",
             "bridge.diagnostics.bundle",
+            "audio.live.auto_configure",
+            "audio.live.status",
+            "audio.live.stop",
+            "provider.vtube_studio.audio_mouth_fallback",
             "douyin.visible.region_occlusion_guard",
             "douyin.visible.open_diagnostics_folder",
             "douyin.visible.three_channel",
@@ -101,6 +116,12 @@ def install() -> None:
                 result = start_domestic_provider(payload)
             elif command_type == "provider.stop_session" and provider_type in DOMESTIC_PROVIDER_TYPES:
                 result = stop_domestic_provider(payload)
+            elif command_type == "audio.live.auto_configure":
+                result = await _live_audio_manager(self).auto_configure(dict(payload or {}))
+            elif command_type == "audio.live.status":
+                result = _live_audio_manager(self).status()
+            elif command_type == "audio.live.stop":
+                result = await _live_audio_manager(self).stop()
             elif command_type == "bridge.diagnostics.paths":
                 result = current_paths()
             elif command_type == "bridge.diagnostics.bundle":
@@ -179,6 +200,9 @@ async def main() -> None:
         finally:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
+            live_audio = getattr(instance, "live_audio_setup", None)
+            if live_audio is not None:
+                await live_audio.stop()
             collector = getattr(instance, "douyin_collector", None)
             if collector is not None:
                 await asyncio.to_thread(collector.stop)
