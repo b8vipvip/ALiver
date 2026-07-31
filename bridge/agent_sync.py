@@ -20,6 +20,7 @@ from bridge.douyin_three_channel_patch import install_douyin_three_channel_patch
 from bridge.douyin_validation_fix import install_douyin_validation_fix
 from bridge.douyin_visible_runtime_patch import install_visible_collector_runtime_patch
 from bridge.douyin_wgc_hwnd_patch import install_douyin_wgc_hwnd_patch
+from bridge.douyin_wgc_safe_fallback_patch import install_douyin_wgc_safe_fallback_patch
 from bridge.douyin_window_capture_patch import install_douyin_window_capture_patch
 from bridge.full_validation import run_full_validation
 from bridge.runtime_diagnostics import (
@@ -57,6 +58,7 @@ def install() -> None:
     install_douyin_region_occlusion_patch()
     install_douyin_three_channel_patch()
     install_douyin_wgc_hwnd_patch()
+    install_douyin_wgc_safe_fallback_patch()
     install_douyin_three_channel_config_patch()
     install_douyin_validation_fix()
     install_douyin_scan_logging_patch()
@@ -81,6 +83,7 @@ def install() -> None:
             "douyin.visible.electron_accessibility",
             "douyin.visible.windows_graphics_capture",
             "douyin.visible.windows_graphics_capture.hwnd",
+            "douyin.visible.screen_region_clear_fallback",
             "douyin.visible.channel_probe",
             "aliver.full_validation",
             "provider.avatar.full_validation",
