@@ -103,3 +103,10 @@ pro_director_service.control_run = guarded_control_run
 from app.live_welcome_patch import install_live_welcome_patch  # noqa: E402
 
 install_live_welcome_patch()
+
+# Import and patch the event scorer before douyin_live_service imports score_event
+# by value. This guarantees viewer-entry events reach the director even when the
+# configured minimum score is higher than the old generic system-event score.
+from app.live_welcome_ingest_patch import install_live_welcome_ingest_patch  # noqa: E402
+
+install_live_welcome_ingest_patch()
