@@ -1,4 +1,4 @@
-__version__ = "0.16.1"
+__version__ = "0.16.0"
 
 # Install compatibility fixes before app.main imports workers and API routers.
 from app import pro_director_runtime_patch as _pro_director_runtime_patch  # noqa: E402,F401
