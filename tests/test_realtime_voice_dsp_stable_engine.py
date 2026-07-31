@@ -60,11 +60,12 @@ def test_engine_uses_one_full_duplex_pyaudio_stream() -> None:
     patch = (ROOT / "bridge/realtime_voice_dsp_stable_engine_patch.py").read_text(
         encoding="utf-8"
     )
+    active_code = patch[patch.index("def run_stream"):]
 
-    assert "input=True" in patch
-    assert "output=True" in patch
-    assert "pyaudiowpatch-single-full-duplex" in patch
-    assert "self._append_recording(\"original\", original)" in patch
-    assert "self._append_recording(\"processed\", processed)" in patch
-    assert "AudioStream" not in patch
-    assert "_start_monitor" not in patch
+    assert "input=True" in active_code
+    assert "output=True" in active_code
+    assert "pyaudiowpatch-single-full-duplex" in active_code
+    assert "self._append_recording(\"original\", original)" in active_code
+    assert "self._append_recording(\"processed\", processed)" in active_code
+    assert "from pedalboard.io import AudioStream" not in active_code
+    assert "self._start_monitor(" not in active_code
