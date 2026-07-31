@@ -20,10 +20,21 @@ def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
     assert "/static/console_layout_v2.js" in loader
     assert "/static/live_debug_validation.js" in loader
     assert "/static/wgc_hwnd_ui_patch.js" in loader
+    assert "/static/audio_live_setup.js" in loader
     assert "tab-simli-tuning" in layout
     assert "直播调试中心" in layout
     assert "live-debug-full-validation" in layout
     assert "aliver.full_validation" in validation
+
+
+def test_live_audio_setup_exposes_one_click_route_and_lipsync_commands():
+    frontend = _read("app/static/audio_live_setup.js")
+    bridge = _read("bridge/agent_sync.py")
+
+    assert "一键配置直播语音与口型" in frontend
+    assert "audio.live.auto_configure" in frontend
+    assert "audio.live.auto_configure" in bridge
+    assert "provider.vtube_studio.audio_mouth_fallback" in bridge
 
 
 def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
