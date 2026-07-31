@@ -2,6 +2,7 @@ from pathlib import Path
 
 from bridge.realtime_voice_dsp import (
     apply_preset,
+    match_stream_device_name,
     normalize_dsp_config,
     recommend_dsp_routes,
 )
@@ -37,10 +38,27 @@ def test_sweet_young_preset_changes_real_dsp_values():
     assert value["presence_db"] > 0
 
 
+def test_pedalboard_device_name_matching_tolerates_suffixes():
+    candidates = [
+        "CABLE Output (VB-Audio Virtual Cable)",
+        "Speakers (Realtek High Definition Audio)",
+    ]
+
+    assert (
+        match_stream_device_name(candidates, "CABLE Output (VB-Audio Virtual Cable) [Input]")
+        == "CABLE Output (VB-Audio Virtual Cable)"
+    )
+
+
 def test_route_recommendation_uses_third_cable_for_processed_output():
-    standard_loopback = {
-        "key": "std-loop",
-        "name": "CABLE Input (VB-Audio Virtual Cable) [Loopback]",
+    standard_microphone = {
+        "key": "std-mic",
+        "name": "CABLE Output (VB-Audio Virtual Cable)",
+        "virtual_family": "vb-cable",
+    }
+    standard_playback = {
+        "key": "std-play",
+        "name": "CABLE Input (VB-Audio Virtual Cable)",
         "virtual_family": "vb-cable",
     }
     cable_b_playback = {
@@ -57,11 +75,7 @@ def test_route_recommendation_uses_third_cable_for_processed_output():
         "routes": {
             "gpt_out": {
                 "family": "vb-cable",
-                "capture": standard_loopback,
-                "playback": {
-                    "name": "CABLE Input (VB-Audio Virtual Cable)",
-                    "virtual_family": "vb-cable",
-                },
+                "playback": standard_playback,
             },
             "gpt_in": {
                 "family": "vb-cable-a",
@@ -74,9 +88,9 @@ def test_route_recommendation_uses_third_cable_for_processed_output():
         "virtual_pairs": [
             {
                 "family": "vb-cable",
-                "loopback": standard_loopback,
-                "playback": {"key": "std-play"},
-                "microphone": {"key": "std-mic"},
+                "loopback": {"key": "std-loop"},
+                "playback": standard_playback,
+                "microphone": standard_microphone,
             },
             {
                 "family": "vb-cable-a",
@@ -97,25 +111,24 @@ def test_route_recommendation_uses_third_cable_for_processed_output():
 
     assert result["ready"] is True
     assert result["input_family"] == "vb-cable"
+    assert result["input_microphone"]["key"] == "std-mic"
     assert result["output_family"] == "vb-cable-b"
     assert result["output_playback"]["key"] == "b-play"
     assert result["output_microphone"]["key"] == "b-mic"
+    assert result["instructions"]["dsp_input"].startswith("CABLE Output")
     assert result["instructions"]["douyin_microphone"].startswith("CABLE-B Output")
 
 
 def test_route_recommendation_warns_when_only_two_cables_exist():
     scan = {
         "routes": {
-            "gpt_out": {
-                "family": "vb-cable",
-                "capture": {"key": "std-loop", "virtual_family": "vb-cable"},
-            },
+            "gpt_out": {"family": "vb-cable"},
             "gpt_in": {"family": "vb-cable-a"},
         },
         "virtual_pairs": [
             {
                 "family": "vb-cable",
-                "loopback": {"key": "std-loop", "virtual_family": "vb-cable"},
+                "loopback": {"key": "std-loop"},
                 "playback": {"key": "std-play"},
                 "microphone": {"key": "std-mic"},
             },
