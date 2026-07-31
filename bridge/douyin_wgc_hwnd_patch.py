@@ -236,7 +236,9 @@ def _capture_target_window(self: Any, window: Any):
         )
         crop = image[crop_top : crop_top + crop_height, crop_left : crop_left + crop_width].copy()
         if crop.size == 0:
-            raise RuntimeError("PrintWindow 已取得窗口画面，但 OCR 区域超出范围，请重新自动校准")
+            raise RuntimeError(
+                "PrintWindow 已取得窗口画面，但 OCR 区域超出范围，请重新自动校准"
+            ) from wgc_exc
 
         self._last_window_image = image
         self._last_region_image = crop
