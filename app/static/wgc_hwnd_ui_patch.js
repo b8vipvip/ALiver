@@ -1,6 +1,6 @@
 (() => {
-  const EXPECTED_BRIDGE_VERSION = '0.10.4';
-  const SERVER_VERSION = '0.14.4';
+  const EXPECTED_BRIDGE_VERSION = '0.10.5';
+  const SERVER_VERSION = '0.14.5';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -39,13 +39,13 @@
       } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
         setText(
           warning,
-          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本会分离开播前检查和开播后真实互动验证。`,
+          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本会选择真实可见 HWND、隔离历史截图并自动恢复验证前置状态。`,
         );
         setClass(warning, 'diagnosis bad');
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；可先运行开播前检查，再在开播后验证真实互动闭环。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；窗口选择、截图新鲜度、采集器自动启动和模拟导演恢复已启用。`,
         );
         setClass(warning, 'diagnosis good');
       }
