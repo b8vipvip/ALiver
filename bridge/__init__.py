@@ -4,6 +4,7 @@ from bridge.avatar_action_control import install_avatar_action_control_patch
 from bridge.avatar_action_duration_fix import install_avatar_action_duration_fix
 from bridge.live_debug_defaults import install_live_debug_defaults
 from bridge.live_debug_json_safety_patch import install_live_debug_json_safety_patch
+from bridge.startup_retry_patch import install_bridge_startup_retry_patch
 from bridge.vtube_motion import install_vtube_motion_patch
 from bridge.vtube_motion_control import install_vtube_motion_control_patch
 from bridge.vtube_motion_safety import install_vtube_motion_safety_patch
@@ -19,3 +20,4 @@ install_avatar_action_control_patch()
 install_avatar_action_duration_fix()
 install_vtube_motion_control_patch()
 install_live_debug_json_safety_patch()
+install_bridge_startup_retry_patch()
