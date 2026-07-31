@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import asyncio
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -13,10 +13,13 @@ from app.auto_director_service import wrap_director_instruction
 from app.db import get_db
 from app.director_service import dispatch_command
 from app.json_utils import dumps
+from app.live_run_service import live_run_recorder
 from app.log_service import write_log
 from app.models import BrowserExtension, DirectorCommand
+from app.security import verify_token
 from app.voice_service import (
     get_or_create_profile,
+    handle_assistant_completed,
     profile_catalog,
     profile_to_dict,
     resolve_audio_file,
@@ -36,7 +39,7 @@ class VoiceProfileUpdate(BaseModel):
     native_voice: str = "Maple"
     style_instruction: str = ""
     auto_apply_style: bool = True
-    auto_mute_chatgpt_tab: bool = True
+    auto_mute_chatgpt_tab: bool = False
     tts_api_base_url: str | None = None
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "shimmer"
@@ -47,6 +50,14 @@ class VoiceProfileUpdate(BaseModel):
 
 class VoiceTestRequest(BaseModel):
     text: str = "你好呀，这是 ALiver 甜美语音的第一版测试。"
+
+
+class AssistantCompletedRequest(BaseModel):
+    message_id: str = ""
+    text: str
+    url: str = ""
+    title: str = ""
+    observed_at: str | None = None
 
 
 async def _queue_extension_command(
@@ -122,16 +133,6 @@ def save_profile(
 @router.post("/profiles/{extension_id}/apply", dependencies=[Depends(require_admin_token)])
 async def apply_profile(extension_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     row = get_or_create_profile(db, extension_id)
-    commands: list[dict[str, Any]] = []
-    if row.mode == "api_tts" and row.auto_mute_chatgpt_tab:
-        mute = await _queue_extension_command(
-            db,
-            extension_id,
-            "voice_tab_mute",
-            {"muted": True, "source": "voice_profile_apply"},
-            priority=99,
-        )
-        commands.append({"id": mute.id, "type": mute.command_type, "status": mute.status})
     style = await _queue_extension_command(
         db,
         extension_id,
@@ -144,29 +145,35 @@ async def apply_profile(extension_id: str, db: Session = Depends(get_db)) -> dic
         },
         priority=98,
     )
-    commands.append({"id": style.id, "type": style.command_type, "status": style.status})
+    api_tts_notice = (
+        "API TTS 已启用。第一版需要把 ChatGPT 切到文字对话，或手动静音该浏览器标签页，"
+        "避免 ChatGPT 原声与 ALiver 合成音重叠。"
+        if row.mode == "api_tts"
+        else ""
+    )
     return {
         "applied": True,
         "mode": row.mode,
-        "commands": commands,
+        "commands": [{"id": style.id, "type": style.command_type, "status": style.status}],
+        "native_voice": row.native_voice,
+        "manual_native_voice_selection_required": row.mode == "chatgpt_live",
         "message": (
-            "已静音绑定的 ChatGPT 标签页，并启用 ALiver API TTS。"
-            if row.mode == "api_tts" and row.auto_mute_chatgpt_tab
-            else "语音表达风格已发送到当前 ChatGPT 对话。"
+            f"语音表达风格已发送到当前 ChatGPT 对话。{api_tts_notice}"
+            if api_tts_notice
+            else "语音表达风格已发送到当前 ChatGPT 对话；内置音色请在 ChatGPT 语音设置中选择。"
         ),
     }
 
 
 @router.post("/profiles/{extension_id}/unmute", dependencies=[Depends(require_admin_token)])
-async def unmute_profile(extension_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    command = await _queue_extension_command(
-        db,
-        extension_id,
-        "voice_tab_mute",
-        {"muted": False, "source": "voice_profile_unmute"},
-        priority=99,
-    )
-    return {"unmuted": True, "command_id": command.id, "status": command.status}
+def unmute_profile(extension_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if db.get(BrowserExtension, extension_id) is None:
+        raise HTTPException(status_code=404, detail="Chrome extension not found")
+    return {
+        "unmuted": False,
+        "manual": True,
+        "message": "第一版不自动修改浏览器标签页静音状态，请在 Chrome 标签页菜单中手动取消静音。",
+    }
 
 
 @router.post("/profiles/{extension_id}/test", dependencies=[Depends(require_admin_token)])
@@ -182,6 +189,25 @@ async def test_profile(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"TTS 接口调用失败：{type(exc).__name__}: {exc}") from exc
+
+
+@router.post("/extensions/{extension_id}/assistant-completed")
+async def assistant_completed(
+    extension_id: str,
+    payload: AssistantCompletedRequest,
+    x_extension_token: str = Header(default="", alias="X-Extension-Token"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    extension = db.get(BrowserExtension, extension_id)
+    if extension is None or not verify_token(x_extension_token, extension.token_hash):
+        raise HTTPException(status_code=401, detail="Invalid extension token")
+    data = payload.model_dump()
+    live_run_recorder.record_external(
+        "chatgpt.assistant.completed",
+        {"extension_id": extension_id, **data},
+    )
+    asyncio.create_task(handle_assistant_completed(extension_id, data))
+    return {"accepted": True, "message_id": payload.message_id}
 
 
 @router.get("/audio/{audio_id}")
