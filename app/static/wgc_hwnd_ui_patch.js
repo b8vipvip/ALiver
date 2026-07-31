@@ -1,6 +1,6 @@
 (() => {
-  const EXPECTED_BRIDGE_VERSION = '0.11.0';
-  const SERVER_VERSION = '0.15.0';
+  const EXPECTED_BRIDGE_VERSION = '0.11.1';
+  const SERVER_VERSION = '0.15.1';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -34,18 +34,18 @@
       setClass(bridgeBadge, `badge ${bridgeVersion === EXPECTED_BRIDGE_VERSION ? 'good' : 'warn'}`);
 
       if (!bridge) {
-        setText(warning, '没有在线 Windows Bridge。采集、VTube Studio、动作、口型与 API TTS 暂时不能运行。');
+        setText(warning, '没有在线 Windows Bridge。采集、VTube Studio、动作、口型与本机音频暂时不能运行。');
         setClass(warning, 'diagnosis bad');
       } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
         setText(
           warning,
-          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本增加直播运行记录和 GPT_OUT TTS 播放能力。`,
+          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本增加服务端等待重试和数字人会话自动恢复。`,
         );
         setClass(warning, 'diagnosis bad');
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；直播记录、窗口诊断、语音实验室和 API TTS 能力已启用。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；窗口诊断、原生语音调音和会话自动恢复能力已启用。`,
         );
         setClass(warning, 'diagnosis good');
       }

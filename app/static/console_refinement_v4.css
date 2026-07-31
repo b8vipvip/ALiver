@@ -1,0 +1,208 @@
+#tab-director,
+#tab-director * {
+  box-sizing: border-box;
+}
+
+#tab-director .director-grid,
+#tab-director .auto-director-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+#tab-director .panel,
+#tab-director form,
+#tab-director label,
+#tab-director .professional-director-fields,
+#tab-director .director-plan-wizard,
+#tab-director .auto-director-status,
+#tab-director .director-command-list,
+#tab-director .auto-director-event-list {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#tab-director input,
+#tab-director select,
+#tab-director textarea,
+#tab-director pre,
+#tab-director code {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+#tab-director .inline-fields,
+#tab-director .actions,
+#tab-director .director-options,
+#tab-director .auto-director-numbers {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+#tab-director .inline-fields > label,
+#tab-director .director-options > label,
+#tab-director .auto-director-numbers > label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+#tab-director .director-plan-wide {
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 18px;
+  border: 1px solid #355d80;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(18, 42, 64, .92), rgba(10, 20, 31, .98));
+}
+
+#tab-director .director-plan-wide .director-plan-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#tab-director .professional-director-fields {
+  overflow: hidden;
+}
+
+#tab-director .auto-director-grid > .panel,
+#tab-director .director-grid > .panel {
+  position: static !important;
+  width: auto !important;
+  overflow: hidden;
+}
+
+.avatar-session-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 6px;
+  border: 1px solid #2a3e55;
+  border-radius: 11px;
+  background: #0a1623;
+}
+
+.avatar-session-switcher button {
+  flex: 1 1 180px;
+  min-height: 40px;
+  border-color: transparent;
+  background: transparent;
+  color: #9eb0c4;
+}
+
+.avatar-session-switcher button.active {
+  color: white;
+  border-color: #3f79bd;
+  background: rgba(74, 149, 255, .14);
+}
+
+.avatar-session-subpanel[hidden] {
+  display: none !important;
+}
+
+#avatar-provider-subpanel,
+#avatar-provider-subpanel.embedded-provider-panel {
+  display: block;
+  min-width: 0;
+}
+
+#avatar-provider-subpanel > .page-heading {
+  margin-top: 0;
+}
+
+#avatar-provider-subpanel .workspace-split,
+#avatar-session-main .workspace-split {
+  grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr) !important;
+}
+
+#avatar-provider-subpanel .workspace-editor,
+#avatar-session-main .workspace-editor {
+  top: 132px;
+}
+
+.native-voice-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.native-voice-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.native-voice-control-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.native-slider {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid #263c53;
+  border-radius: 10px;
+  background: #091522;
+}
+
+.native-slider-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #dceaff;
+}
+
+.native-slider output {
+  color: #80b9ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.native-slider input[type="range"] {
+  width: 100%;
+}
+
+.native-voice-preview {
+  position: sticky;
+  top: 132px;
+}
+
+.native-voice-preview blockquote {
+  margin: 12px 0;
+  white-space: pre-wrap;
+  line-height: 1.75;
+}
+
+.native-voice-fact {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid #f1b83f;
+  background: rgba(241, 184, 63, .08);
+  color: #e5c87d;
+  line-height: 1.65;
+}
+
+@media (max-width: 1180px) {
+  #avatar-provider-subpanel .workspace-split,
+  #avatar-session-main .workspace-split,
+  .native-voice-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  #avatar-provider-subpanel .workspace-editor,
+  #avatar-session-main .workspace-editor,
+  .native-voice-preview {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  #tab-director .director-plan-wide .director-plan-options,
+  .native-voice-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .native-voice-control-grid .wide {
+    grid-column: auto;
+  }
+}
