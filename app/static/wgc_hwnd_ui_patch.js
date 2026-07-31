@@ -1,6 +1,6 @@
 (() => {
-  const EXPECTED_BRIDGE_VERSION = '0.10.3';
-  const SERVER_VERSION = '0.14.3';
+  const EXPECTED_BRIDGE_VERSION = '0.10.4';
+  const SERVER_VERSION = '0.14.4';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -39,13 +39,13 @@
       } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
         setText(
           warning,
-          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。该版本会把 WGC 绑定到已验证的直播伴侣 HWND。`,
+          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本会分离开播前检查和开播后真实互动验证。`,
         );
         setClass(warning, 'diagnosis bad');
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；WGC 将优先使用准确 HWND，失败时仅回退到同一窗口表面或未被遮挡的互动区。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；可先运行开播前检查，再在开播后验证真实互动闭环。`,
         );
         setClass(warning, 'diagnosis good');
       }
