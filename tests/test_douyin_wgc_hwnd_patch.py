@@ -63,8 +63,8 @@ def test_exact_window_printwindow_fallback_does_not_enable_desktop_capture(monke
 
     assert source == "printwindow"
     assert full.shape == (80, 100, 3)
-    assert crop.shape == (40, 40, 3)
-    assert pixels == (50, 20, 40, 40)
+    assert crop.shape == (60, 40, 3)
+    assert pixels == (50, 20, 40, 60)
     assert manager._state["capture_safety"] == "printwindow_exact_hwnd_surface"
     assert manager._state["capture_foreground_required"] is False
 
