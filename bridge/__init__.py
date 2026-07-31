@@ -8,6 +8,7 @@ from bridge.control_guard_install_patch import install_control_guard_install_pat
 from bridge.fast_startup_patch import install_bridge_fast_startup_patch
 from bridge.live_debug_defaults import install_live_debug_defaults
 from bridge.live_debug_json_safety_patch import install_live_debug_json_safety_patch
+from bridge.realtime_voice_dsp_route_guard import install_realtime_voice_dsp_route_guard
 from bridge.startup_retry_patch import install_bridge_startup_retry_patch
 from bridge.vtube_motion import install_vtube_motion_patch
 from bridge.vtube_motion_control import install_vtube_motion_control_patch
@@ -18,6 +19,7 @@ from bridge.vtube_studio_auth_fix import install_vtube_studio_auth_fix
 install_bridge_fast_startup_patch()
 install_audio_device_family_patch()
 install_audio_scan_guard_patch()
+install_realtime_voice_dsp_route_guard()
 install_live_debug_defaults()
 install_vtube_studio_auth_fix()
 install_vtube_motion_patch()
