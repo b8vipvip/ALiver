@@ -31,7 +31,7 @@ class VoiceProfile(Base):
     native_voice: Mapped[str] = mapped_column(String(64), default="Maple")
     style_instruction: Mapped[str] = mapped_column(Text, default="")
     auto_apply_style: Mapped[bool] = mapped_column(Boolean, default=True)
-    auto_mute_chatgpt_tab: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_mute_chatgpt_tab: Mapped[bool] = mapped_column(Boolean, default=False)
     tts_api_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tts_model: Mapped[str] = mapped_column(String(200), default="gpt-4o-mini-tts")
     tts_voice: Mapped[str] = mapped_column(String(120), default="shimmer")
