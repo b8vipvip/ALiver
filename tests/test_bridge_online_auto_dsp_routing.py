@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_bridge_output_uses_active_websocket_as_online_truth() -> None:
+    now = datetime.now(timezone.utc)
     row = SimpleNamespace(
         id="bridge-1",
         name="Windows Bridge",
@@ -18,8 +20,8 @@ def test_bridge_output_uses_active_websocket_as_online_truth() -> None:
         metadata_json="{}",
         status="online",
         last_seen_at=None,
-        created_at=None,
-        updated_at=None,
+        created_at=now,
+        updated_at=now,
     )
 
     stale = bridge_to_out(row, False)
