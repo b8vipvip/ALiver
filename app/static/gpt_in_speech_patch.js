@@ -46,6 +46,7 @@
     ['/static/console_shell_v3.js', 'aliver-console-shell-v3'],
     ['/static/live_run_console.js', 'aliver-live-run-console'],
     ['/static/native_voice_lab_v2.js', 'aliver-native-voice-lab-v2'],
+    ['/static/realtime_voice_dsp_ui_patch.js', 'aliver-realtime-voice-dsp-ui-patch'],
     ['/static/console_refinement_v4.js', 'aliver-console-refinement-v4'],
   ];
 
