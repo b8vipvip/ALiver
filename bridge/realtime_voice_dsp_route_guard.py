@@ -8,6 +8,7 @@ from bridge import realtime_voice_dsp as dsp
 def _route_family(route: dict[str, Any], configured: dict[str, Any]) -> str:
     return str(
         configured.get("family")
+        or route.get("family")
         or dict(route.get("microphone") or {}).get("virtual_family")
         or dict(route.get("playback") or {}).get("virtual_family")
         or dict(route.get("capture") or {}).get("virtual_family")
