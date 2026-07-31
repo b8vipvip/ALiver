@@ -8,6 +8,17 @@ if (-not (Test-Path $pythonExe)) {
     throw ".venv was not found. Run .\scripts\setup_windows.ps1 first."
 }
 
+# Python writes UTF-8 while Windows PowerShell 5.1 otherwise decodes native
+# pipeline output with the current OEM code page. Keep console text and the
+# Tee-Object stream in the same encoding so Chinese diagnostics are readable.
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$global:OutputEncoding = $utf8NoBom
+if ($PSVersionTable.PSEdition -eq "Desktop") {
+    & chcp.com 65001 | Out-Null
+}
+
 # Do not enumerate every Win32_Process through WMI here. On some Windows
 # machines that query takes many seconds. bridge.agent_sync already owns a
 # cross-process lock and will immediately reject a duplicate Bridge safely.
