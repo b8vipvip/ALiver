@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import threading
 import time
 from typing import Any
@@ -9,6 +11,9 @@ from bridge import douyin_visible_collector as collector
 from bridge import douyin_window_capture_patch as window_capture
 
 _ORIGINAL_CAPTURE_TARGET: Any = None
+_ORIGINAL_ELECTRON_LINES: Any = None
+_COMMAND_LINE_CACHE: dict[int, str] = {}
+_COMMAND_LINE_CACHE_LOCK = threading.RLock()
 
 
 def _root_hwnd(hwnd: int) -> int:
@@ -22,6 +27,47 @@ def _root_hwnd(hwnd: int) -> int:
         return int(win32gui.GetAncestor(hwnd, 2) or hwnd)  # GA_ROOT
     except Exception:
         return int(hwnd)
+
+
+def _safe_query_process_command_line(pid: int) -> str:
+    """Read another process command line outside the Bridge COM apartment.
+
+    Repeated win32com/WMI calls from the collector thread caused RPC_E_DISCONNECTED
+    and native access-violation fault dumps on the user's Windows 10 machine. A
+    short-lived PowerShell process contains COM failures outside the Bridge and
+    the result is cached for the lifetime of each PID.
+    """
+
+    pid = int(pid or 0)
+    if pid <= 0 or os.name != "nt":
+        return ""
+    with _COMMAND_LINE_CACHE_LOCK:
+        if pid in _COMMAND_LINE_CACHE:
+            return _COMMAND_LINE_CACHE[pid]
+
+    script = (
+        "$OutputEncoding=[Console]::OutputEncoding=[Text.UTF8Encoding]::new();"
+        f"$p=Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" -ErrorAction SilentlyContinue;"
+        "if($p){[Console]::Write($p.CommandLine)}"
+    )
+    creationflags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
+    try:
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            check=False,
+            creationflags=creationflags,
+        )
+        value = completed.stdout.strip() if completed.returncode == 0 else ""
+    except Exception:
+        value = ""
+    with _COMMAND_LINE_CACHE_LOCK:
+        _COMMAND_LINE_CACHE[pid] = value
+    return value
 
 
 class HwndWindowsGraphicsCaptureSession(three_channel._WindowsGraphicsCaptureSession):
@@ -207,15 +253,33 @@ def _capture_target_window(self: Any, window: Any):
         return image, crop, "printwindow", (crop_left, crop_top, crop_width, crop_height)
 
 
+def _safe_electron_accessibility_lines(self: Any, window: Any) -> list[dict[str, Any]]:
+    status = three_channel.electron_accessibility_status(self)
+    if not bool(status.get("enabled")):
+        return []
+    # The first-level UIA implementation already reads the Chromium tree once
+    # the process is launched with --force-renderer-accessibility. Reusing it
+    # avoids a second pywinauto descendants traversal on every scan.
+    lines = list(self._uia_lines(window) or [])
+    for line in lines:
+        line["source"] = "electron_accessibility"
+        line["forced_accessibility"] = True
+    return lines
+
+
 def install_douyin_wgc_hwnd_patch() -> None:
-    global _ORIGINAL_CAPTURE_TARGET
+    global _ORIGINAL_CAPTURE_TARGET, _ORIGINAL_ELECTRON_LINES
     manager = collector.DouyinVisibleCollectorManager
     if getattr(manager, "_aliver_wgc_hwnd_patch", False):
         return
 
     _ORIGINAL_CAPTURE_TARGET = three_channel._capture_target_window
+    _ORIGINAL_ELECTRON_LINES = three_channel.electron_accessibility_lines
+    three_channel._query_process_command_line = _safe_query_process_command_line
     three_channel._session_for_window = _session_for_window
     three_channel._capture_target_window = _capture_target_window
+    three_channel.electron_accessibility_lines = _safe_electron_accessibility_lines
     window_capture._capture_target_window = _capture_target_window
     manager._capture_target_window = _capture_target_window
+    manager.electron_accessibility_lines = _safe_electron_accessibility_lines
     manager._aliver_wgc_hwnd_patch = True
