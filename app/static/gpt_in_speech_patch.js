@@ -32,10 +32,11 @@
 })();
 
 (() => {
-  const version = '0.14.2';
+  const version = '0.14.3';
   const assets = [
     ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
     ['/static/live_debug_validation.js', 'aliver-live-debug-validation'],
+    ['/static/wgc_hwnd_ui_patch.js', 'aliver-wgc-hwnd-ui-patch'],
     ['/static/local_time_patch.js', 'aliver-local-time-patch'],
     ['/static/diagnostics_zh.js', 'aliver-diagnostics-zh'],
     ['/static/provider_catalog.js', 'aliver-provider-catalog-script'],

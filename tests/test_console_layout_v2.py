@@ -8,8 +8,8 @@ def _read(relative: str) -> str:
 
 
 def test_version_pair_is_bumped_for_live_debug_release():
-    assert '__version__ = "0.14.2"' in _read("app/__init__.py")
-    assert 'BRIDGE_VERSION = "0.10.2"' in _read("bridge/agent_sync.py")
+    assert '__version__ = "0.14.3"' in _read("app/__init__.py")
+    assert 'BRIDGE_VERSION = "0.10.3"' in _read("bridge/agent_sync.py")
 
 
 def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
@@ -19,6 +19,7 @@ def test_bootstrap_loader_wires_the_dedicated_live_debug_workspace():
 
     assert "/static/console_layout_v2.js" in loader
     assert "/static/live_debug_validation.js" in loader
+    assert "/static/wgc_hwnd_ui_patch.js" in loader
     assert "tab-simli-tuning" in layout
     assert "直播调试中心" in layout
     assert "live-debug-full-validation" in layout

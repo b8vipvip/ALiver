@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.14.2"
+version = "0.14.3"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -57,6 +57,7 @@ ignore = ["B008"]
 "bridge/douyin_visible_runtime_patch.py" = ["E501"]
 "bridge/douyin_window_capture_patch.py" = ["E501", "I001", "F401"]
 "bridge/douyin_three_channel_patch.py" = ["E501", "I001"]
+"bridge/douyin_wgc_hwnd_patch.py" = ["E501"]
 "bridge/douyin_validation_fix.py" = ["E501"]
 "bridge/full_validation.py" = ["E501", "UP035"]
 "bridge/vtube_motion_v2.py" = ["E501"]
