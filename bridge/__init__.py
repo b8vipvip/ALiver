@@ -15,6 +15,9 @@ from bridge.realtime_voice_dsp_granular_patch import (
 from bridge.realtime_voice_dsp_output_guard_patch import (
     install_realtime_voice_dsp_output_guard_patch,
 )
+from bridge.realtime_voice_dsp_preset_library_patch import (
+    install_realtime_voice_dsp_preset_library_patch,
+)
 from bridge.realtime_voice_dsp_route_guard import install_realtime_voice_dsp_route_guard
 from bridge.realtime_voice_dsp_stable_engine_patch import (
     install_realtime_voice_dsp_stable_engine_patch,
@@ -33,6 +36,7 @@ install_realtime_voice_dsp_route_guard()
 install_realtime_voice_dsp_stable_engine_patch()
 install_realtime_voice_dsp_output_guard_patch()
 install_realtime_voice_dsp_granular_patch()
+install_realtime_voice_dsp_preset_library_patch()
 install_audio_environment_patch()
 install_live_debug_defaults()
 install_vtube_studio_auth_fix()

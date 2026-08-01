@@ -48,8 +48,9 @@ def test_console_assets_use_dsp_release_cache_key():
     loader = _read("app/static/gpt_in_speech_patch.js")
     refinement = _read("app/static/console_refinement_v4.js")
 
-    assert "0.16.2" in loader
+    assert "0.16.3" in loader
     assert "0.15.1-hotfix3" in refinement
+    assert "/static/dsp_preset_library_ui.js" in loader
 
 
 def test_server_disables_polling_access_log_noise():

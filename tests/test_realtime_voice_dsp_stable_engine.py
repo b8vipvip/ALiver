@@ -37,8 +37,9 @@ def test_stable_engine_replaces_dual_portaudio_runtime() -> None:
     manager = dsp.RealtimeVoiceDSPManager
 
     assert manager._aliver_stable_single_portaudio_engine is True
+    assert manager._aliver_preset_library_patch is True
     assert manager._run_stream.__module__.endswith("realtime_voice_dsp_stable_engine_patch")
-    assert manager.devices.__module__.endswith("realtime_voice_dsp_stable_engine_patch")
+    assert manager.devices.__module__.endswith("realtime_voice_dsp_preset_library_patch")
     assert manager.configure.__module__.endswith("realtime_voice_dsp_stable_engine_patch")
 
 
