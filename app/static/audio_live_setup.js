@@ -63,7 +63,7 @@
       <div class="section-title">
         <div>
           <h2>直播语音与 VTube Studio 口型联动</h2>
-          <p class="hint">自动选择双虚拟声卡、校验 VTube Studio 原生麦克风口型；原生口型没有响应时，自动启用 GPT_OUT 音量驱动的 API 口型兜底。</p>
+          <p class="hint">自动识别直通或实时 DSP 模式。DSP 启用时，直播伴侣和 VTube Studio 只允许使用 CABLE-B Output；原声 CABLE Output 仅供 DSP 捕获。</p>
         </div>
         <div class="actions">
           <span id="audio-live-badge" class="badge warn">未配置</span>
@@ -108,21 +108,35 @@
     const native = data?.native_lipsync;
     const fallback = Boolean(data?.fallback_running || data?.api_mouth_fallback);
     const routeReady = Boolean(data?.route_ready);
+    const dspMode = instructions.routing_mode === 'dsp_processed' || Boolean(instructions.dsp_selected);
+    const duplicateRisk = Boolean(data?.duplicate_audio_risk);
 
     let kind = 'warn';
-    let message = '双虚拟声卡尚未完成配置。';
-    let label = '未配置';
-    if (routeReady && native?.passed) {
+    let message = dspMode
+      ? '实时 DSP 已启用；直播伴侣和 VTube Studio 必须只选择处理后的 CABLE-B Output。'
+      : '当前为原声直通模式；直播伴侣和 VTube Studio 使用 CABLE Output。';
+    let label = dspMode ? 'DSP 模式' : '直通模式';
+    if (duplicateRisk) {
+      kind = 'bad';
+      label = '存在双声风险';
+      message = 'DSP 已启用，但直播目标仍指向原声 CABLE Output。请重新一键配置并改用 CABLE-B Output。';
+    } else if (routeReady && native?.passed) {
       kind = 'good';
-      label = '原生口型正常';
-      message = '音频路由已就绪，VTube Studio 原生麦克风口型验证通过。';
+      label = dspMode ? 'DSP 路由正常' : '原生口型正常';
+      message = dspMode
+        ? 'DSP 三线链路已就绪，VTube Studio 与直播伴侣目标均为 CABLE-B Output。'
+        : '原声直通路由已就绪，VTube Studio 原生麦克风口型验证通过。';
     } else if (routeReady && fallback) {
       kind = 'good';
-      label = 'API 口型兜底中';
-      message = '音频路由已就绪；VTube Studio 原生口型没有响应，已自动启用 GPT_OUT 音量驱动口型。';
+      label = dspMode ? 'DSP + API 口型' : 'API 口型兜底中';
+      message = dspMode
+        ? 'DSP 三线链路已就绪；VTube Studio 使用 CABLE-B Output，API 口型兜底已启动。'
+        : '音频路由已就绪；VTube Studio 原生口型没有响应，已自动启用 GPT_OUT 音量驱动口型。';
     } else if (routeReady && !data?.session_id) {
-      label = '等待 VTube 会话';
-      message = '双虚拟声卡已配置。启动 VTube Studio 数字人会话后再次点击一键配置，即可验证并修复口型。';
+      label = dspMode ? 'DSP 路由待验证' : '等待 VTube 会话';
+      message = dspMode
+        ? 'DSP 路由已选择 CABLE-B Output。启动 VTube Studio 会话后再次验证口型。'
+        : '虚拟声卡已配置。启动 VTube Studio 数字人会话后再次点击一键配置。';
     } else if (data?.last_error) {
       kind = 'bad';
       label = '配置失败';
@@ -131,12 +145,20 @@
 
     badge.textContent = label;
     badge.className = `badge ${kind}`;
-    diagnosis.textContent = native?.diagnosis || message;
+    diagnosis.textContent = duplicateRisk ? message : (native?.diagnosis || message);
     diagnosis.className = `diagnosis ${kind}`;
     targets.innerHTML = [
-      targetCard('Chrome / ChatGPT 输出', instructions.chrome_output, 'ChatGPT 回答进入 GPT_OUT'),
-      targetCard('直播伴侣主麦克风', instructions.douyin_microphone, '与 VTube Studio 共用 GPT_OUT 录音端'),
-      targetCard('VTube Studio 麦克风', instructions.vtube_microphone, '原生高级口型应选择此设备并开启 Use microphone'),
+      targetCard('Chrome / ChatGPT 输出', instructions.chrome_output, '原声进入标准 VB-CABLE'),
+      targetCard(
+        '直播伴侣主麦克风',
+        instructions.douyin_microphone,
+        dspMode ? 'DSP 模式只能选择处理后的录音端；不要同时添加 CABLE Output' : '原声直通录音端',
+      ),
+      targetCard(
+        'VTube Studio 麦克风',
+        instructions.vtube_microphone,
+        dspMode ? '选择 CABLE-B Output 并开启 Use microphone' : '选择原声录音端并开启 Use microphone',
+      ),
       targetCard('ChatGPT Live 麦克风', instructions.chatgpt_microphone, 'GPT_IN 独立虚拟麦克风'),
     ].join('');
     json.textContent = JSON.stringify(data || {}, null, 2);
@@ -166,11 +188,11 @@
     const previous = button?.textContent || '';
     if (button) {
       button.disabled = true;
-      button.textContent = '正在配置并验证…';
+      button.textContent = '正在识别 DSP 并配置…';
     }
     const diagnosis = document.getElementById('audio-live-diagnosis');
     if (diagnosis) {
-      diagnosis.textContent = '正在选择双虚拟声卡、发送口型测试音并检查 VTube Studio 参数变化…';
+      diagnosis.textContent = '正在检测实时 DSP 状态、选择唯一直播输出并验证 VTube Studio 口型…';
       diagnosis.className = 'diagnosis warn';
     }
     try {
@@ -182,7 +204,8 @@
       );
       render(data);
       if (typeof toast === 'function') {
-        toast(data?.fallback_running ? '直播音频已配置，API 口型兜底已启动' : '直播音频与 VTube Studio 口型验证完成');
+        const dspMode = data?.instructions?.routing_mode === 'dsp_processed';
+        toast(dspMode ? 'DSP 直播输出已统一到 CABLE-B Output' : '原声直通与 VTube Studio 口型验证完成');
       }
       return data;
     } finally {
