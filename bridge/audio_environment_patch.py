@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import os
@@ -43,7 +44,14 @@ def _pair(scan: dict[str, Any], family: str) -> dict[str, Any]:
     )
 
 
-def _check(check_id: str, label: str, status: str, detail: str, *, automatic: bool) -> dict[str, Any]:
+def _check(
+    check_id: str,
+    label: str,
+    status: str,
+    detail: str,
+    *,
+    automatic: bool,
+) -> dict[str, Any]:
     return {
         "id": check_id,
         "label": label,
@@ -109,7 +117,12 @@ class AudioEnvironmentDoctor:
 
         rates: list[int] = []
         for row in (raw, gpt_in, processed):
-            for endpoint in (row.get("playback"), row.get("microphone"), row.get("loopback")):
+            endpoints = (
+                row.get("playback"),
+                row.get("microphone"),
+                row.get("loopback"),
+            )
+            for endpoint in endpoints:
                 if isinstance(endpoint, dict) and endpoint.get("default_sample_rate"):
                     rates.append(int(endpoint["default_sample_rate"]))
         unique_rates = sorted(set(rates))
@@ -120,7 +133,10 @@ class AudioEnvironmentDoctor:
                 "pass" if unique_rates == [48000] else "warn",
                 "全部端点为 48000 Hz。"
                 if unique_rates == [48000]
-                else f"检测到采样率 {unique_rates or ['未知']}，建议所有 CABLE 端点统一为 48000 Hz。",
+                else (
+                    f"检测到采样率 {unique_rates or ['未知']}，"
+                    "建议所有 CABLE 端点统一为 48000 Hz。"
+                ),
                 automatic=False,
             )
         )
@@ -178,8 +194,12 @@ class AudioEnvironmentDoctor:
         )
 
         chrome_running = "chrome.exe" in processes
-        douyin_running = any(name in processes for name in {"直播伴侣.exe", "webcast_mate.exe"})
-        vtube_running = any(name in processes for name in {"vtube studio.exe", "vtubestudio.exe"})
+        douyin_running = any(
+            name in processes for name in {"直播伴侣.exe", "webcast_mate.exe"}
+        )
+        vtube_running = any(
+            name in processes for name in {"vtube studio.exe", "vtubestudio.exe"}
+        )
         checks.extend(
             [
                 _check(
@@ -207,10 +227,17 @@ class AudioEnvironmentDoctor:
         )
 
         vtube_manager = getattr(self.agent, "vtube_studio", None)
-        sessions = list(getattr(vtube_manager, "sessions", {}).values()) if vtube_manager else []
-        target_name = str(dict(recommendation.get("output_microphone") or {}).get("name") or "")
+        sessions = (
+            list(getattr(vtube_manager, "sessions", {}).values())
+            if vtube_manager
+            else []
+        )
+        target_name = str(
+            dict(recommendation.get("output_microphone") or {}).get("name") or ""
+        )
         vtube_targets_ok = all(
-            not target_name or str(runtime.config.get("audio_device_name") or "") == target_name
+            not target_name
+            or str(runtime.config.get("audio_device_name") or "") == target_name
             for runtime in sessions
         )
         checks.append(
@@ -239,7 +266,11 @@ class AudioEnvironmentDoctor:
                 "vtube_microphone": dict(processed.get("microphone") or {}).get("name"),
             },
             "manual_limitations": [
-                "Windows 的每应用输出和直播伴侣内部麦克风选择没有由 ALiver 使用的稳定公开接口；程序会检测信号并打开设置页，但不会盲目修改系统私有配置。",
+                (
+                    "Windows 的每应用输出和直播伴侣内部麦克风选择没有由 ALiver "
+                    "使用的稳定公开接口；程序会检测信号并打开设置页，但不会盲目修改"
+                    "系统私有配置。"
+                ),
                 "虚拟声卡高级格式（采样率/位深）只检查，不在直播运行时强制修改。",
             ],
         }
@@ -250,7 +281,9 @@ class AudioEnvironmentDoctor:
         recommendation = dict(scan.get("dsp_recommendation") or {})
         if not recommendation.get("ready"):
             warnings = recommendation.get("warnings") or []
-            raise RuntimeError(warnings[0] if warnings else "三张虚拟声卡尚未完整识别。")
+            raise RuntimeError(
+                warnings[0] if warnings else "三张虚拟声卡尚未完整识别。"
+            )
 
         input_device = dict(recommendation.get("input_microphone") or {})
         output_device = dict(recommendation.get("output_playback") or {})
@@ -314,11 +347,11 @@ def install_audio_environment_patch() -> None:
 
     async def execute(self, command_type, payload):
         if command_type == "audio.environment.check":
-            return await __import__("asyncio").to_thread(_doctor(self).check)
+            return await asyncio.to_thread(_doctor(self).check)
         if command_type == "audio.environment.apply":
-            return await __import__("asyncio").to_thread(_doctor(self).apply)
+            return await asyncio.to_thread(_doctor(self).apply)
         if command_type == "audio.environment.open_windows_settings":
-            return await __import__("asyncio").to_thread(
+            return await asyncio.to_thread(
                 _doctor(self).open_windows_audio_settings
             )
         return await original_execute(self, command_type, payload)
