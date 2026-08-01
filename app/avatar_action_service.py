@@ -159,6 +159,8 @@ def director_action_for_command(row: DirectorCommand) -> tuple[str, int, int]:
 
 
 def schedule_director_command_action(row: DirectorCommand) -> None:
+    if row.command_type == "plan_generate":
+        return
     action, priority, duration_ms = director_action_for_command(row)
     payload = loads(row.payload_json, {})
     explicit = bool(payload.get("avatar_action"))
@@ -191,6 +193,13 @@ def schedule_chatgpt_status(extension_id: str, *, generating: bool) -> None:
     if previous is current:
         return
     _extension_generating_state[extension_id] = current
+
+    # Browser planning is a configuration task, not a live performance. Do not
+    # animate the avatar merely because ChatGPT is generating a plan JSON.
+    from app.browser_director_plan_service import is_browser_plan_active
+
+    if is_browser_plan_active(extension_id):
+        return
     if not current:
         # Speech detection or the action timeout restores the correct live base state.
         # Do not let a low-priority idle signal interrupt a gift/welcome/manual action.
