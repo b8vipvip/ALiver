@@ -1,6 +1,7 @@
 (() => {
   let busy = false;
   let installed = false;
+  let doctorInstalled = false;
 
   function esc(value) {
     if (typeof escapeHtml === 'function') return escapeHtml(String(value ?? ''));
@@ -76,8 +77,6 @@
       const bridgeId = await connectedBridge();
       const liveStatus = await sendBridgeCommand(bridgeId, 'audio.dsp.status', {}, 10);
 
-      // PortAudio device enumeration must not run while the realtime stream is
-      // active. Use the already-resolved endpoints from the running status.
       if (liveStatus.running) {
         showAutomaticEndpoints(liveStatus.input_device, liveStatus.output_device);
         const start = document.getElementById('dsp-start');
@@ -118,7 +117,7 @@
       if (start) start.disabled = false;
       if (apply) apply.disabled = false;
       if (showMessage) {
-        resultBox('三线音频路由已自动配置：标准 CABLE 接收 ChatGPT 原声，CABLE-A 专用于 GPT_IN，CABLE-B 输出 DSP 处理后声音。');
+        resultBox('ALiver 内部三线音频路由已自动配置。Chrome 与直播伴侣的应用级设备由环境检查器验证。');
       }
       return { bridgeId, data: { ...data, status: configured }, raw, gptIn, processed };
     } catch (error) {
@@ -136,12 +135,17 @@
   function renderRecording(result) {
     const box = document.getElementById('dsp-ab-result');
     if (!box) return;
-    box.className = 'dsp-ab-result diagnosis good';
-    box.innerHTML = `<strong>A/B 录制完成</strong><br>
+    const originalDb = Number(result.original?.dbfs ?? -96);
+    const processedDb = Number(result.processed?.dbfs ?? -96);
+    const silentOutput = originalDb > -70 && processedDb <= -90;
+    box.className = `dsp-ab-result diagnosis ${silentOutput ? 'bad' : 'good'}`;
+    box.innerHTML = `<strong>${silentOutput ? 'A/B 录制失败：处理后输出为静音' : 'A/B 录制完成'}</strong><br>
       原声：${esc(result.original_path)}<br>
       处理后：${esc(result.processed_path)}<br>
-      电平：${esc(result.original?.dbfs)} dBFS → ${esc(result.processed?.dbfs)} dBFS<br>
-      频谱重心：${esc(result.original?.spectral_centroid_hz)} Hz → ${esc(result.processed?.spectral_centroid_hz)} Hz`;
+      电平：${esc(originalDb)} dBFS → ${esc(processedDb)} dBFS<br>
+      频谱重心：${esc(result.original?.spectral_centroid_hz)} Hz → ${esc(result.processed?.spectral_centroid_hz)} Hz${
+        silentOutput ? '<br>输入已有声音，但 DSP 没有产生输出；请运行下方环境检查。' : ''
+      }`;
   }
 
   async function recordCompare(event) {
@@ -156,6 +160,9 @@
       const bridgeId = await connectedBridge();
       const status = await sendBridgeCommand(bridgeId, 'audio.dsp.status', {}, 10);
       if (!status.running) throw new Error('请先启动实时 DSP，再录制 A/B 对比。');
+      if (status.signal_diagnosis?.input_without_output) {
+        throw new Error('检测到 DSP 输入已有声音但输出为静音，请先点击“一键检查并修复”。');
+      }
       showAutomaticEndpoints(status.input_device, status.output_device);
       box.className = 'dsp-ab-result diagnosis warn';
       box.textContent = '录制已开始，请马上到 ChatGPT 点击“更多操作 → 朗读”。录制期间不会扫描或重启音频设备。';
@@ -177,6 +184,89 @@
     }
   }
 
+  function ensureDoctorPanel() {
+    if (doctorInstalled) return;
+    const anchor = document.getElementById('dsp-ab-result');
+    const parent = anchor?.parentElement;
+    if (!anchor || !parent) return;
+    doctorInstalled = true;
+    const panel = document.createElement('section');
+    panel.id = 'dsp-environment-doctor';
+    panel.style.marginTop = '14px';
+    panel.innerHTML = `
+      <hr>
+      <h3>音频环境自动检查</h3>
+      <p class="hint">自动修复 ALiver、DSP 和 ALiver 管理的 VTube Studio 路由；检测 Chrome、直播伴侣和 Windows 虚拟声卡设置。</p>
+      <div class="actions">
+        <button id="dsp-env-apply" type="button">一键检查并修复</button>
+        <button id="dsp-env-check" type="button" class="secondary">仅检查</button>
+        <button id="dsp-env-settings" type="button" class="secondary">打开 Windows 音量设置</button>
+      </div>
+      <div id="dsp-env-result" class="diagnosis warn">尚未检查完整音频环境。</div>`;
+    parent.insertBefore(panel, anchor.nextSibling);
+    document.getElementById('dsp-env-apply')?.addEventListener('click', () => runDoctor(true));
+    document.getElementById('dsp-env-check')?.addEventListener('click', () => runDoctor(false));
+    document.getElementById('dsp-env-settings')?.addEventListener('click', openWindowsSettings);
+  }
+
+  function renderDoctor(result) {
+    const box = document.getElementById('dsp-env-result');
+    if (!box) return;
+    const statusClass = result.status === 'ready' ? 'good' : result.status === 'failed' ? 'bad' : 'warn';
+    const icon = value => value === 'pass' ? '✅' : value === 'fail' ? '❌' : '⚠️';
+    const rows = (result.checks || []).map(row =>
+      `<div style="margin:6px 0"><strong>${icon(row.status)} ${esc(row.label)}</strong><br><span class="hint">${esc(row.detail)}${row.automatic ? '（可自动修复）' : ''}</span></div>`
+    ).join('');
+    const instructions = result.instructions || {};
+    box.className = `diagnosis ${statusClass}`;
+    box.innerHTML = `<strong>环境状态：${esc(result.status)}</strong>${rows}
+      <hr><strong>外部应用应选择</strong><br>
+      Chrome 输出：${esc(instructions.chrome_output || '未识别')}<br>
+      ChatGPT 麦克风：${esc(instructions.chatgpt_microphone || '未识别')}<br>
+      直播伴侣麦克风：${esc(instructions.douyin_microphone || '未识别')}<br>
+      VTube Studio 麦克风：${esc(instructions.vtube_microphone || '未识别')}`;
+  }
+
+  async function runDoctor(apply) {
+    const button = document.getElementById(apply ? 'dsp-env-apply' : 'dsp-env-check');
+    const old = button?.textContent || '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = apply ? '正在检查和修复…' : '正在检查…';
+    }
+    try {
+      const bridgeId = await connectedBridge();
+      const result = await sendBridgeCommand(
+        bridgeId,
+        apply ? 'audio.environment.apply' : 'audio.environment.check',
+        {},
+        45,
+      );
+      renderDoctor(result);
+      if (result.dsp_status) showAutomaticEndpoints(result.dsp_status.input_device, result.dsp_status.output_device);
+    } catch (error) {
+      const box = document.getElementById('dsp-env-result');
+      if (box) {
+        box.className = 'diagnosis bad';
+        box.textContent = error.message;
+      }
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = old;
+      }
+    }
+  }
+
+  async function openWindowsSettings() {
+    try {
+      const bridgeId = await connectedBridge();
+      await sendBridgeCommand(bridgeId, 'audio.environment.open_windows_settings', {}, 10);
+    } catch (error) {
+      if (typeof toast === 'function') toast(error.message, true);
+    }
+  }
+
   function install() {
     const bridge = document.getElementById('dsp-bridge');
     const input = document.getElementById('dsp-input');
@@ -186,6 +276,7 @@
       window.setTimeout(install, 200);
       return;
     }
+    ensureDoctorPanel();
     if (installed) return;
     installed = true;
 
