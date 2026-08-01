@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from fastapi import FastAPI
 
-from app.windows_asyncio_noise_patch import is_harmless_windows_reset
+from app.windows_asyncio_noise_patch import (
+    install_windows_asyncio_noise_filter,
+    is_harmless_windows_reset,
+)
 from bridge.audio_environment_patch import AudioEnvironmentDoctor
 from bridge.realtime_voice_dsp_output_guard_patch import _RealtimeBoardAdapter
 
@@ -196,3 +202,62 @@ def test_windows_reset_noise_filter_is_narrow() -> None:
 
     assert is_harmless_windows_reset(harmless) is True
     assert is_harmless_windows_reset(unrelated) is False
+
+
+def test_windows_reset_filter_wraps_the_real_fastapi_lifespan_loop() -> None:
+    lifecycle: list[str] = []
+
+    @asynccontextmanager
+    async def base_lifespan(_application):
+        lifecycle.append("started")
+        yield
+        lifecycle.append("stopped")
+
+    application = FastAPI(lifespan=base_lifespan)
+    install_windows_asyncio_noise_filter(application)
+
+    class WindowsReset(ConnectionResetError):
+        winerror = 10054
+
+    async def exercise() -> None:
+        loop = asyncio.get_running_loop()
+        forwarded: list[dict] = []
+
+        def previous(_loop, context):
+            forwarded.append(context)
+
+        loop.set_exception_handler(previous)
+        try:
+            async with application.router.lifespan_context(application):
+                current = loop.get_exception_handler()
+                assert current is not None
+                assert current is not previous
+                assert application.state.windows_asyncio_noise_filter_active is True
+
+                current(
+                    loop,
+                    {
+                        "message": (
+                            "Exception in callback "
+                            "_ProactorBasePipeTransport._call_connection_lost(None)"
+                        ),
+                        "exception": WindowsReset("reset"),
+                    },
+                )
+                current(
+                    loop,
+                    {
+                        "message": "application task failed",
+                        "exception": RuntimeError("boom"),
+                    },
+                )
+                assert len(forwarded) == 1
+
+            assert loop.get_exception_handler() is previous
+            assert application.state.windows_asyncio_noise_filter_active is False
+        finally:
+            loop.set_exception_handler(None)
+
+    asyncio.run(exercise())
+
+    assert lifecycle == ["started", "stopped"]
