@@ -1,6 +1,6 @@
 (() => {
-  const EXPECTED_BRIDGE_VERSION = '0.12.1';
-  const SERVER_VERSION = '0.16.2';
+  const EXPECTED_BRIDGE_VERSION = '0.12.2';
+  const SERVER_VERSION = '0.16.3';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -39,13 +39,13 @@
       } else if (bridgeVersion !== EXPECTED_BRIDGE_VERSION) {
         setText(
           warning,
-          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本使用连续重叠相加变调，修复逐块卡顿。`,
+          `当前 Bridge 为 ${bridgeVersion}，请停止旧进程并启动 ${EXPECTED_BRIDGE_VERSION}。新版本支持连续颗粒变调和可命名的声音预设库。`,
         );
         setClass(warning, 'diagnosis bad');
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；连续 DSP、实时信号验证和会话恢复能力已启用。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；连续 DSP、声音预设库、实时信号验证和会话恢复能力已启用。`,
         );
         setClass(warning, 'diagnosis good');
       }
@@ -64,37 +64,24 @@
     });
   }
 
-  function bindStatusObserver() {
-    const elements = [
-      document.getElementById('live-debug-server-version'),
-      document.getElementById('live-debug-bridge-version'),
-      document.getElementById('live-debug-version-warning'),
-    ];
-    if (elements.some(element => !element)) return false;
-
-    applyVersionState();
-    statusObserver?.disconnect();
+  function installObserver() {
+    if (statusObserver || !document.body) return;
     statusObserver = new MutationObserver(scheduleApply);
-    for (const element of elements) {
-      statusObserver.observe(element, {
-        attributes: true,
-        attributeFilter: ['class'],
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-    }
-    return true;
-  }
-
-  function start() {
-    if (bindStatusObserver()) return;
-    const mountObserver = new MutationObserver(() => {
-      if (bindStatusObserver()) mountObserver.disconnect();
+    statusObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
     });
-    mountObserver.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  function install() {
+    installObserver();
+    applyVersionState();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install, { once: true });
+  } else {
+    install();
+  }
 })();
