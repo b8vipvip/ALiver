@@ -95,7 +95,12 @@ def _validate_extension(extension: BrowserExtension) -> None:
         )
     metadata = loads(extension.metadata_json, {})
     binding = metadata.get("binding") if isinstance(metadata.get("binding"), dict) else {}
-    if binding and not bool(binding.get("valid")):
+    if not binding:
+        raise BrowserDirectorPlanError(
+            "尚未绑定目标 ChatGPT 会话。请在需要用于策划的 ChatGPT 页面中打开 ALiver Controller，"
+            "点击“绑定当前 ChatGPT 会话”。"
+        )
+    if not bool(binding.get("valid")):
         raise BrowserDirectorPlanError(str(binding.get("reason") or "当前绑定的 ChatGPT 会话已失效。"))
     if bool(metadata.get("live_active")):
         raise BrowserDirectorPlanError("当前绑定的 ChatGPT 正在语音对话。请先结束语音模式，再生成直播方案。")
@@ -185,9 +190,14 @@ async def generate_plan_with_bound_chatgpt(
         response_text = str(result.get("response_text") or "").strip()
         if not response_text:
             raise BrowserDirectorPlanError("ChatGPT 已完成回答，但扩展没有读取到方案文本。")
-        raw = _parse_json(response_text)
+        try:
+            raw = _parse_json(response_text)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise BrowserDirectorPlanError(
+                "ChatGPT 的回答不是可解析的导演方案 JSON，请点击生成按钮重试。"
+            ) from exc
         returned_request_id = str(raw.get("aliver_plan_request_id") or "").strip()
-        if returned_request_id and returned_request_id != request_id:
+        if returned_request_id != request_id:
             raise BrowserDirectorPlanError("收到的 ChatGPT 方案与本次请求不匹配，请重新生成。")
         plan = normalize_plan(
             raw,
