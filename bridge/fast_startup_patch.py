@@ -5,7 +5,8 @@ import os
 import socket
 import sys
 import time
-from typing import Any, Awaitable
+from collections.abc import Awaitable
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
