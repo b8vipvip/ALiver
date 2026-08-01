@@ -1,6 +1,6 @@
 [project]
 name = "aliver"
-version = "0.16.3"
+version = "0.16.4"
 description = "Local-first control plane for AI live avatar experiments"
 readme = "README.md"
 requires-python = ">=3.10"

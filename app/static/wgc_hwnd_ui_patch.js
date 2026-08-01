@@ -1,6 +1,6 @@
 (() => {
   const EXPECTED_BRIDGE_VERSION = '0.12.2';
-  const SERVER_VERSION = '0.16.3';
+  const SERVER_VERSION = '0.16.4';
   let applying = false;
   let pending = false;
   let statusObserver = null;
@@ -45,7 +45,7 @@
       } else {
         setText(
           warning,
-          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；连续 DSP、声音预设库、实时信号验证和会话恢复能力已启用。`,
+          `服务端 ${SERVER_VERSION} 与 Bridge ${bridgeVersion} 已匹配；浏览器 ChatGPT 策划、连续 DSP、声音预设库和会话恢复能力已启用。`,
         );
         setClass(warning, 'diagnosis good');
       }

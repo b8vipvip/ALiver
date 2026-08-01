@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ALiver ChatGPT Controller",
-  "version": "0.1.4",
-  "description": "Receives ALiver director commands, binds one ChatGPT conversation, and reports completed assistant replies for diagnostics and optional TTS.",
+  "version": "0.1.5",
+  "description": "Receives ALiver director commands, binds one ChatGPT conversation, generates director plans in text mode, and reports completed assistant replies.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -12,7 +12,7 @@
     "https://chat.openai.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background_entry.js"
   },
   "action": {
     "default_title": "ALiver Controller",
@@ -25,7 +25,7 @@
         "https://www.chatgpt.com/*",
         "https://chat.openai.com/*"
       ],
-      "js": ["content.js", "assistant_capture.js"],
+      "js": ["content.js", "assistant_capture.js", "planner_content.js"],
       "run_at": "document_idle"
     }
   ]

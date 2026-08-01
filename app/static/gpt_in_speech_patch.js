@@ -32,7 +32,7 @@
 })();
 
 (() => {
-  const version = '0.16.3';
+  const version = '0.16.4';
 
   document.documentElement.classList.add('aliver-shell-booting');
   if (!document.getElementById('aliver-shell-boot-style')) {
