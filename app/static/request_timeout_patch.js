@@ -66,6 +66,25 @@
     return value && value.data !== undefined ? value.data : value;
   }
 
+  function revealConsole() {
+    document.documentElement.classList.remove('aliver-shell-booting');
+    document.body.classList.add('aliver-shell-ready');
+  }
+
+  function waitForShell(startedAt = performance.now()) {
+    if (document.getElementById('aliver-app-shell')) {
+      revealConsole();
+      return;
+    }
+    if (performance.now() - startedAt >= 5000) {
+      revealConsole();
+      document.body.classList.add('aliver-shell-fallback');
+      return;
+    }
+    window.setTimeout(() => waitForShell(startedAt), 40);
+  }
+
   window.api = boundedApi;
   window.sendBridgeCommand = boundedBridgeCommand;
+  waitForShell();
 })();
