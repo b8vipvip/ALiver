@@ -31,7 +31,10 @@ class StreamingGranularPitchShifter:
         self.channels = max(1, int(channels))
         self.semitones = float(semitones)
         self.ratio = 2.0 ** (self.semitones / 12.0)
-        self.grain_frames = max(64, int(round(self.sample_rate * grain_ms / 1000.0)))
+        self.grain_frames = max(
+            64,
+            int(round(self.sample_rate * grain_ms / 1000.0)),
+        )
         self.minimum_delay_frames = max(
             8,
             int(round(self.sample_rate * minimum_delay_ms / 1000.0)),
@@ -161,10 +164,14 @@ class GranularPitchBoard:
             shifted = self._pitch.process(source)
             priming = self._pitch.priming
             algorithm_latency = self._pitch.algorithm_latency_ms
+            grain_frames = self._pitch.grain_frames
+            ratio = self._pitch.ratio
         else:
             shifted = source
             priming = False
             algorithm_latency = 0.0
+            grain_frames = 0
+            ratio = 1.0
 
         rendered = self.effect_board(shifted, sample_rate, reset=reset)
         result = np.asarray(rendered, dtype=np.float32)
@@ -181,12 +188,17 @@ class GranularPitchBoard:
             io_latency = float(self.manager._state.get("io_latency_ms") or 0.0)
             self.manager._state.update(
                 {
+                    "stream_engine": (
+                        "pyaudiowpatch-single-full-duplex-granular"
+                    ),
                     "processing_mode": (
                         "streaming-granular-delay"
                         if abs(self.semitones) >= 0.01
                         else "pedalboard-stateful-no-pitch"
                     ),
                     "pitch_algorithm_latency_ms": algorithm_latency,
+                    "pitch_grain_frames": grain_frames,
+                    "pitch_ratio": round(ratio, 6),
                     "pitch_priming": priming,
                     "estimated_latency_ms": round(
                         io_latency + algorithm_latency,
@@ -194,7 +206,10 @@ class GranularPitchBoard:
                     ),
                 }
             )
-        return np.ascontiguousarray(np.clip(result, -1.0, 1.0), dtype=np.float32)
+        return np.ascontiguousarray(
+            np.clip(result, -1.0, 1.0),
+            dtype=np.float32,
+        )
 
 
 def install_realtime_voice_dsp_granular_patch() -> None:
