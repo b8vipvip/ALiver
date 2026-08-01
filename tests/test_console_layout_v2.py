@@ -7,11 +7,11 @@ def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_version_pair_is_bumped_for_realtime_dsp_release():
-    assert '__version__ = "0.16.3"' in _read("app/__init__.py")
+def test_version_pair_is_bumped_for_browser_planner_release():
+    assert '__version__ = "0.16.4"' in _read("app/__init__.py")
     assert 'BRIDGE_PATCH_VERSION = "0.12.2"' in _read("bridge/startup_retry_patch.py")
     assert 'BRIDGE_VERSION = "0.12.0"' in _read("bridge/agent_sync.py")
-    assert '"version": "0.1.4"' in _read("chrome_extension/manifest.json")
+    assert '"version": "0.1.5"' in _read("chrome_extension/manifest.json")
 
 
 def test_bootstrap_loader_wires_live_debug_and_operations_workspaces():
@@ -64,7 +64,7 @@ def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
     patch = _read("app/static/wgc_hwnd_ui_patch.js")
 
     assert "const EXPECTED_BRIDGE_VERSION = '0.12.2'" in patch
-    assert "const SERVER_VERSION = '0.16.3'" in patch
+    assert "const SERVER_VERSION = '0.16.4'" in patch
     assert "new MutationObserver" in patch
     assert "queueMicrotask" in patch
     assert "setInterval(applyVersionState" not in patch
