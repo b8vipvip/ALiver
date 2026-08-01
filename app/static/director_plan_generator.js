@@ -78,6 +78,12 @@
     form.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  function sourceLabel(source) {
+    if (source === 'browser_chatgpt') return '当前 ChatGPT 窗口';
+    if (source === 'ai') return 'API AI 策划';
+    return '本地专业模板';
+  }
+
   function renderPreview(result) {
     const preview = document.getElementById('director-plan-preview');
     const summary = result.summary || {};
@@ -88,7 +94,7 @@
         <article><span>直播标题</span><strong>${esc(summary.show_title || plan.show_title)}</strong></article>
         <article><span>预计时长</span><strong>${esc(summary.duration_minutes || 0)} 分钟</strong></article>
         <article><span>节目环节</span><strong>${esc(summary.segment_count || segments.length)} 个</strong></article>
-        <article><span>生成方式</span><strong>${result.source === 'ai' ? 'AI 策划' : '本地专业模板'}</strong></article>
+        <article><span>生成方式</span><strong>${esc(sourceLabel(result.source))}</strong></article>
       </div>
       <div class="director-plan-segments">
         ${segments.map((item, index) => `
@@ -102,32 +108,53 @@
     `;
   }
 
-  async function generatePlan(preferAi) {
+  async function saveGeneratedPlan(form) {
+    if (!document.getElementById('director-plan-auto-save')?.checked) return false;
+    if (typeof saveAutoDirectorConfig !== 'function') {
+      throw new Error('方案已填入表单，但自动保存函数尚未加载，请手动点击“保存自动导演配置”。');
+    }
+    await saveAutoDirectorConfig({ preventDefault() {}, target: form });
+    return true;
+  }
+
+  async function generatePlan(mode) {
     const form = document.getElementById('auto-director-config-form');
     const extensionId = document.getElementById('auto-director-extension')?.value || '';
     const brief = document.getElementById('director-plan-brief')?.value.trim() || '';
     if (!extensionId) throw new Error('请先选择 Chrome 导演扩展');
     if (brief.length < 2) throw new Error('请先用一句话说明直播主题、目标和希望的风格');
 
-    const button = document.getElementById(preferAi ? 'director-plan-generate-ai' : 'director-plan-generate-local');
+    const ids = {
+      browser_chatgpt: 'director-plan-generate-browser',
+      api: 'director-plan-generate-ai',
+      local: 'director-plan-generate-local',
+    };
+    const button = document.getElementById(ids[mode]);
     const diagnosis = document.getElementById('director-plan-diagnosis');
     const initial = button.textContent;
     button.disabled = true;
-    button.textContent = preferAi ? 'AI 正在策划…' : '正在生成模板…';
+    button.textContent = mode === 'browser_chatgpt'
+      ? '等待 ChatGPT 策划…'
+      : mode === 'api' ? 'API AI 正在策划…' : '正在生成模板…';
     diagnosis.className = 'diagnosis warn';
-    diagnosis.textContent = preferAi
-      ? '正在让 AI 生成导演简报、节目单和节奏参数，请稍候。'
-      : '正在生成本地专业直播方案。';
+    diagnosis.textContent = mode === 'browser_chatgpt'
+      ? '正在把策划提示词发送到当前绑定的 ChatGPT 文字窗口，并等待完整 JSON 方案。请不要切换会话或开启语音模式。'
+      : mode === 'api'
+        ? '正在通过已配置的 OpenAI 兼容接口生成导演方案。'
+        : '正在生成本地专业直播方案。';
     try {
+      const timeoutMs = mode === 'browser_chatgpt' ? 190000 : mode === 'api' ? 70000 : 20000;
       const result = await api('/api/auto-director/plan/generate', {
         method: 'POST',
+        timeoutMs,
         body: JSON.stringify({
           extension_id: extensionId,
           brief,
           duration_minutes: Number(document.getElementById('director-plan-duration')?.value || 45),
           category: document.getElementById('director-plan-category')?.value || 'chat',
           tone: document.getElementById('director-plan-tone')?.value || 'natural',
-          prefer_ai: preferAi,
+          generation_mode: mode,
+          prefer_ai: mode === 'api',
           api_base_url: form.elements.api_base_url?.value || null,
           model_name: form.elements.model_name?.value || null,
           api_key: form.elements.api_key?.value || null,
@@ -137,10 +164,12 @@
       lastPlan = result.plan;
       applyPlan(form, result.plan);
       renderPreview(result);
-      diagnosis.className = `diagnosis ${result.source === 'ai' ? 'ok' : 'warn'}`;
-      diagnosis.textContent = result.fallback_reason
-        || 'AI 已生成完整直播方案并填入表单。请检查后点击“保存自动导演配置”。';
-      toast(result.source === 'ai' ? 'AI 直播方案已生成并填入' : '本地专业方案已生成并填入');
+      const saved = await saveGeneratedPlan(form);
+      diagnosis.className = `diagnosis ${result.source === 'local_template' ? 'warn' : 'ok'}`;
+      diagnosis.textContent = result.fallback_reason || (saved
+        ? `${sourceLabel(result.source)}已生成完整方案，并自动保存到导演中心。`
+        : `${sourceLabel(result.source)}已生成完整方案并填入表单，请检查后保存。`);
+      toast(saved ? '直播方案已生成并自动应用' : '直播方案已生成并填入');
     } finally {
       button.disabled = false;
       button.textContent = initial;
@@ -161,7 +190,7 @@
       <div class="section-title">
         <div>
           <h3>AI 直播方案生成器</h3>
-          <p class="hint">只需描述这场直播要做什么，AI 会生成导演简报、主播人设、节目单、动作和节奏参数。生成结果只填入表单，保存后才生效。</p>
+          <p class="hint">推荐使用当前绑定的 ChatGPT 文字窗口，无需另配 API。扩展会发送策划提示词、等待完整回答、解析 JSON，并写入导演中心。</p>
         </div>
         <span class="badge">策划助手</span>
       </div>
@@ -190,11 +219,13 @@
           </select>
         </label>
       </div>
+      <label class="check-row"><input id="director-plan-auto-save" type="checkbox" checked>生成后自动保存到导演中心</label>
       <div class="actions">
-        <button id="director-plan-generate-ai" type="button">AI 生成完整方案</button>
+        <button id="director-plan-generate-browser" type="button">使用当前 ChatGPT 生成并应用</button>
+        <button id="director-plan-generate-ai" type="button" class="secondary">使用 API 接口生成</button>
         <button id="director-plan-generate-local" type="button" class="secondary">生成本地专业模板</button>
       </div>
-      <div id="director-plan-diagnosis" class="diagnosis warn">填写直播需求后点击生成。AI 接口未配置或调用失败时会自动回退到本地专业模板。</div>
+      <div id="director-plan-diagnosis" class="diagnosis warn">使用当前 ChatGPT 前，请确认扩展已绑定该会话、输入框可用，并且没有开启语音对话。</div>
       <details class="director-plan-preview-box" open>
         <summary>生成方案预览</summary>
         <div id="director-plan-preview"><p class="hint">尚未生成方案。</p></div>
@@ -202,15 +233,22 @@
     `;
     fields.prepend(wizard);
 
+    document.getElementById('director-plan-generate-browser').addEventListener('click', () => {
+      generatePlan('browser_chatgpt').catch(error => {
+        document.getElementById('director-plan-diagnosis').className = 'diagnosis bad';
+        document.getElementById('director-plan-diagnosis').textContent = error.message;
+        toast(error.message, true);
+      });
+    });
     document.getElementById('director-plan-generate-ai').addEventListener('click', () => {
-      generatePlan(true).catch(error => {
+      generatePlan('api').catch(error => {
         document.getElementById('director-plan-diagnosis').className = 'diagnosis bad';
         document.getElementById('director-plan-diagnosis').textContent = error.message;
         toast(error.message, true);
       });
     });
     document.getElementById('director-plan-generate-local').addEventListener('click', () => {
-      generatePlan(false).catch(error => {
+      generatePlan('local').catch(error => {
         document.getElementById('director-plan-diagnosis').className = 'diagnosis bad';
         document.getElementById('director-plan-diagnosis').textContent = error.message;
         toast(error.message, true);
