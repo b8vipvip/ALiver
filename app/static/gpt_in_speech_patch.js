@@ -32,7 +32,7 @@
 })();
 
 (() => {
-  const version = '0.16.2';
+  const version = '0.16.3';
 
   document.documentElement.classList.add('aliver-shell-booting');
   if (!document.getElementById('aliver-shell-boot-style')) {
@@ -70,6 +70,7 @@
     ['/static/auto_director_refresh_fix.js', 'aliver-auto-director-refresh-fix'],
     ['/static/live_run_console.js', 'aliver-live-run-console'],
     ['/static/native_voice_lab_v2.js', 'aliver-native-voice-lab-v2'],
+    ['/static/dsp_preset_library_ui.js', 'aliver-dsp-preset-library-ui'],
     ['/static/realtime_voice_dsp_ui_patch.js', 'aliver-realtime-voice-dsp-ui-patch'],
     ['/static/dsp_doctor_feedback_patch.js', 'aliver-dsp-doctor-feedback-patch'],
     ['/static/console_refinement_v4.js', 'aliver-console-refinement-v4'],
