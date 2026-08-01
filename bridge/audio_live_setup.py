@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from bridge.full_validation import _mouth_validation
+from bridge.realtime_voice_dsp import recommend_dsp_routes
 
 _ACTIVE_STATUSES = {"active", "starting", "running", "ready", "reconnecting"}
 
@@ -39,7 +40,30 @@ def _active_runtime(manager: Any, requested_session_id: str | None = None) -> An
     )
 
 
-def _route_targets(scan: dict[str, Any]) -> dict[str, Any]:
+def _dsp_selected(dsp_status: dict[str, Any] | None) -> bool:
+    value = dict(dsp_status or {})
+    config = dict(value.get("config") or {})
+    return bool(value.get("running") or config.get("enabled"))
+
+
+def _processed_microphone(
+    scan: dict[str, Any],
+    dsp_status: dict[str, Any] | None,
+) -> dict[str, Any]:
+    value = dict(dsp_status or {})
+    current = dict(value.get("output_microphone") or {})
+    if current:
+        return current
+    recommendation = dict(scan.get("dsp_recommendation") or {})
+    if not recommendation:
+        recommendation = recommend_dsp_routes(scan)
+    return dict(recommendation.get("output_microphone") or {})
+
+
+def _route_targets(
+    scan: dict[str, Any],
+    dsp_status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     routes = dict(scan.get("routes") or {})
     out_capture = dict((routes.get("gpt_out") or {}).get("capture") or {})
     out_playback = dict((routes.get("gpt_out") or {}).get("playback") or {})
@@ -50,14 +74,22 @@ def _route_targets(scan: dict[str, Any]) -> dict[str, Any]:
         (dict(pair) for pair in scan.get("virtual_pairs") or [] if str(pair.get("family") or "") == out_family),
         {},
     )
-    out_microphone = dict(out_pair.get("microphone") or {})
+    raw_microphone = dict(out_pair.get("microphone") or {})
+    dsp_mode = _dsp_selected(dsp_status)
+    processed_microphone = _processed_microphone(scan, dsp_status) if dsp_mode else {}
+    live_microphone = processed_microphone or raw_microphone
+    routing_mode = "dsp_processed" if dsp_mode and processed_microphone else "direct_original"
     return {
         "chrome_output": out_playback,
-        "douyin_microphone": out_microphone,
-        "vtube_microphone": out_microphone,
+        "douyin_microphone": live_microphone,
+        "vtube_microphone": live_microphone,
         "chatgpt_microphone": in_microphone,
         "gpt_in_playback": in_playback,
         "gpt_out_capture": out_capture,
+        "raw_microphone": raw_microphone,
+        "processed_microphone": processed_microphone,
+        "routing_mode": routing_mode,
+        "dsp_selected": dsp_mode,
     }
 
 
@@ -67,6 +99,10 @@ def _target_instructions(targets: dict[str, Any], *, native_failed: bool = False
         "chatgpt_microphone": (targets.get("chatgpt_microphone") or {}).get("name"),
         "douyin_microphone": (targets.get("douyin_microphone") or {}).get("name"),
         "vtube_microphone": (targets.get("vtube_microphone") or {}).get("name"),
+        "raw_microphone": (targets.get("raw_microphone") or {}).get("name"),
+        "processed_microphone": (targets.get("processed_microphone") or {}).get("name"),
+        "routing_mode": str(targets.get("routing_mode") or "direct_original"),
+        "dsp_selected": bool(targets.get("dsp_selected")),
         "vtube_native_required": bool(native_failed),
     }
 
@@ -100,7 +136,7 @@ def _fallback_parameters(runtime: Any) -> tuple[str, ...]:
 
 
 class LiveAudioSetupManager:
-    """Configure dual-cable routing and keep VTube mouth movement alive when native lipsync is absent."""
+    """Configure voice routing and keep VTube mouth movement alive when native lipsync is absent."""
 
     def __init__(self, agent: Any) -> None:
         self.agent = agent
@@ -125,16 +161,49 @@ class LiveAudioSetupManager:
             "updated_at": None,
             "targets": {},
             "route_ready": False,
+            "routing_mode": "direct_original",
+            "duplicate_audio_risk": False,
         }
+
+    def _current_dsp_status(self) -> dict[str, Any]:
+        manager = getattr(self.agent, "realtime_voice_dsp", None)
+        if manager is None:
+            return {}
+        try:
+            return dict(manager.status() or {})
+        except Exception:
+            return {}
 
     def status(self) -> dict[str, Any]:
         task = self._mouth_task
         value = dict(self._state)
+        targets = dict(value.get("targets") or {})
+        dsp_status = self._current_dsp_status()
+        if _dsp_selected(dsp_status):
+            processed = dict(dsp_status.get("output_microphone") or {})
+            if processed:
+                targets["processed_microphone"] = processed
+                targets["douyin_microphone"] = processed
+                targets["vtube_microphone"] = processed
+                targets["routing_mode"] = "dsp_processed"
+                targets["dsp_selected"] = True
+        routing_mode = str(targets.get("routing_mode") or "direct_original")
+        raw_name = str((targets.get("raw_microphone") or {}).get("name") or "")
+        live_name = str((targets.get("douyin_microphone") or {}).get("name") or "")
+        duplicate_risk = bool(routing_mode == "dsp_processed" and raw_name and live_name == raw_name)
+        value["targets"] = targets
+        value["routing_mode"] = routing_mode
+        value["duplicate_audio_risk"] = duplicate_risk
+        value["dsp_status"] = {
+            "running": bool(dsp_status.get("running")),
+            "enabled": bool(dict(dsp_status.get("config") or {}).get("enabled")),
+            "output_microphone": dsp_status.get("output_microphone"),
+        }
         value["fallback_running"] = bool(task and not task.done())
         value["audio_capture"] = self.agent.audio.status()
         native = value.get("native_lipsync")
         value["instructions"] = _target_instructions(
-            dict(value.get("targets") or {}),
+            targets,
             native_failed=bool(value.get("session_id") and isinstance(native, dict) and not native.get("passed")),
         )
         return value
@@ -242,12 +311,17 @@ class LiveAudioSetupManager:
         async with self._lock:
             await asyncio.to_thread(self.agent.audio.apply_recommendations)
             scan = await asyncio.to_thread(self.agent.audio.list_devices)
-            targets = _route_targets(scan)
+            dsp_status = self._current_dsp_status()
+            targets = _route_targets(scan, dsp_status)
             route_ready = bool((scan.get("routes") or {}).get("ready"))
+            if targets.get("dsp_selected") and not targets.get("processed_microphone"):
+                route_ready = False
             self._expected_capture_key = str((targets.get("gpt_out_capture") or {}).get("key") or "")
             if not route_ready:
                 warnings = (scan.get("routes") or {}).get("warnings") or []
-                raise RuntimeError(warnings[0] if warnings else "双虚拟声卡路由尚未就绪")
+                if targets.get("dsp_selected") and not targets.get("processed_microphone"):
+                    raise RuntimeError("实时 DSP 已启用，但没有找到处理后输出录音端。请确认 CABLE-B Output 已启用。")
+                raise RuntimeError(warnings[0] if warnings else "虚拟声卡路由尚未就绪")
 
             manager = getattr(self.agent, "vtube_studio", None)
             runtime = _active_runtime(manager, str(options.get("session_id") or "").strip() or None)
@@ -281,6 +355,7 @@ class LiveAudioSetupManager:
                 await self._release_capture()
                 self._state["mode"] = "routes_ready_waiting_vtube"
 
+            routing_mode = str(targets.get("routing_mode") or "direct_original")
             self._state.update(
                 {
                     "configured": True,
@@ -289,6 +364,8 @@ class LiveAudioSetupManager:
                     "api_mouth_fallback": fallback_enabled,
                     "targets": targets,
                     "route_ready": route_ready,
+                    "routing_mode": routing_mode,
+                    "duplicate_audio_risk": False,
                     "updated_at": time.time(),
                     "last_error": None,
                 }

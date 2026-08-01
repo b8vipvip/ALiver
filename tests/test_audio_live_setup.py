@@ -32,12 +32,32 @@ def _scan() -> dict:
         "name": "CABLE-A Output (VB-Audio Cable A)",
         "virtual_family": "vb-cable-a",
     }
+    processed_playback = {
+        "key": "processed-play",
+        "name": "CABLE-B Input (VB-Audio Cable B)",
+        "virtual_family": "vb-cable-b",
+    }
+    processed_microphone = {
+        "key": "processed-mic",
+        "name": "CABLE-B Output (VB-Audio Cable B)",
+        "virtual_family": "vb-cable-b",
+    }
+    processed_loopback = {
+        "key": "processed-loop",
+        "name": "CABLE-B Input (VB-Audio Cable B) [Loopback]",
+        "virtual_family": "vb-cable-b",
+    }
     return {
         "routes": {
             "ready": True,
             "warnings": [],
             "gpt_out": {"capture": out_capture, "playback": out_playback, "ready": True},
             "gpt_in": {"playback": in_playback, "microphone": in_microphone, "ready": True},
+        },
+        "dsp_recommendation": {
+            "ready": True,
+            "output_microphone": processed_microphone,
+            "output_playback": processed_playback,
         },
         "virtual_pairs": [
             {
@@ -51,6 +71,13 @@ def _scan() -> dict:
                 "family": "vb-cable-a",
                 "playback": in_playback,
                 "microphone": in_microphone,
+                "complete": True,
+            },
+            {
+                "family": "vb-cable-b",
+                "loopback": processed_loopback,
+                "playback": processed_playback,
+                "microphone": processed_microphone,
                 "complete": True,
             },
         ],
@@ -87,6 +114,19 @@ class FakeAudio:
         return self.status()
 
 
+class FakeDSP:
+    def __init__(self, *, running: bool) -> None:
+        self.running = running
+
+    def status(self):
+        scan = _scan()
+        return {
+            "running": self.running,
+            "config": {"enabled": self.running},
+            "output_microphone": scan["virtual_pairs"][2]["microphone"],
+        }
+
+
 class FakeClient:
     def __init__(self) -> None:
         self.injected = []
@@ -121,13 +161,24 @@ def test_dbfs_mapping_has_gate_and_full_scale():
     assert live.dbfs_to_mouth_value(-10.0) == 1.0
 
 
-def test_route_targets_use_gpt_out_microphone_for_douyin_and_vtube():
-    targets = live._route_targets(_scan())
+def test_route_targets_use_raw_microphone_without_dsp():
+    targets = live._route_targets(_scan(), {})
 
     assert targets["chrome_output"]["name"].startswith("CABLE Input")
     assert targets["douyin_microphone"]["name"].startswith("CABLE Output")
     assert targets["vtube_microphone"] == targets["douyin_microphone"]
     assert targets["chatgpt_microphone"]["name"].startswith("CABLE-A Output")
+    assert targets["routing_mode"] == "direct_original"
+
+
+def test_route_targets_use_cable_b_when_dsp_is_active():
+    dsp = FakeDSP(running=True).status()
+    targets = live._route_targets(_scan(), dsp)
+
+    assert targets["routing_mode"] == "dsp_processed"
+    assert targets["douyin_microphone"]["name"].startswith("CABLE-B Output")
+    assert targets["vtube_microphone"] == targets["douyin_microphone"]
+    assert targets["raw_microphone"]["name"].startswith("CABLE Output")
 
 
 def test_fallback_parameters_include_voice_and_standard_mouth():
@@ -154,6 +205,7 @@ def test_auto_configure_enables_api_mouth_fallback_when_native_lipsync_is_silent
         assert result["route_ready"] is True
         assert result["mode"] == "api_mouth_fallback"
         assert result["instructions"]["douyin_microphone"].startswith("CABLE Output")
+        assert result["instructions"]["routing_mode"] == "direct_original"
         assert runtime.config["audio_device_name"].startswith("CABLE Output")
         assert runtime.client.injected
         assert any(values.get("MouthOpen", 0.0) > 0 for values in runtime.client.injected)
@@ -161,6 +213,32 @@ def test_auto_configure_enables_api_mouth_fallback_when_native_lipsync_is_silent
         stopped = await manager.stop()
         assert stopped["fallback_running"] is False
         assert audio.active is False
+
+    asyncio.run(scenario())
+
+
+def test_auto_configure_keeps_dsp_output_as_the_only_live_target(monkeypatch):
+    async def scenario():
+        runtime = _runtime()
+        agent = SimpleNamespace(
+            audio=FakeAudio(),
+            realtime_voice_dsp=FakeDSP(running=True),
+            vtube_studio=SimpleNamespace(sessions={runtime.session_id: runtime}),
+        )
+        manager = live.LiveAudioSetupManager(agent)
+
+        async def working_native(_agent, _runtime):
+            return {"passed": True, "diagnosis": "native ok"}
+
+        monkeypatch.setattr(live, "_mouth_validation", working_native)
+        result = await manager.auto_configure({})
+
+        assert result["routing_mode"] == "dsp_processed"
+        assert result["instructions"]["douyin_microphone"].startswith("CABLE-B Output")
+        assert result["instructions"]["vtube_microphone"].startswith("CABLE-B Output")
+        assert result["instructions"]["raw_microphone"].startswith("CABLE Output")
+        assert runtime.config["audio_device_name"].startswith("CABLE-B Output")
+        assert result["duplicate_audio_risk"] is False
 
     asyncio.run(scenario())
 
