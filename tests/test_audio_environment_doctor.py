@@ -78,13 +78,13 @@ def _scan() -> dict:
 
 
 class _FakeDSP:
-    def __init__(self) -> None:
+    def __init__(self, input_dbfs: float = -16.0, output_dbfs: float = -96.0) -> None:
         self.scan = _scan()
         self.configured = None
         self.value = {
             "running": True,
-            "input_dbfs": -16.0,
-            "output_dbfs": -96.0,
+            "input_dbfs": input_dbfs,
+            "output_dbfs": output_dbfs,
             "input_device": self.scan["virtual_pairs"][0]["microphone"],
             "output_device": self.scan["virtual_pairs"][2]["playback"],
         }
@@ -111,13 +111,13 @@ class _Runtime:
 
 
 class _FakeAgent:
-    def __init__(self) -> None:
-        self.realtime_voice_dsp = _FakeDSP()
+    def __init__(self, dsp: _FakeDSP | None = None) -> None:
+        self.realtime_voice_dsp = dsp or _FakeDSP()
         self.audio = _FakeAudio()
         self.vtube_studio = SimpleNamespace(sessions={"one": _Runtime()})
 
 
-def test_pitch_adapter_never_turns_active_input_into_empty_output() -> None:
+def test_pitch_adapter_uses_overlap_add_instead_of_resetting_every_block() -> None:
     class Board:
         def __init__(self) -> None:
             self.resets: list[bool] = []
@@ -129,17 +129,23 @@ def test_pitch_adapter_never_turns_active_input_into_empty_output() -> None:
                 return np.asarray(audio, dtype=np.float32)
             return np.empty((1, 0), dtype=np.float32)
 
-    manager = SimpleNamespace(_lock=threading.RLock(), _state={})
+    manager = SimpleNamespace(
+        _lock=threading.RLock(),
+        _state={"io_latency_ms": 42.67},
+    )
     board = Board()
-    adapter = _RealtimeBoardAdapter(manager, board, block_reset=True)
+    adapter = _RealtimeBoardAdapter(manager, board, pitch_enabled=True)
     audio = np.ones((2, 1024), dtype=np.float32) * 0.2
 
-    result = adapter(audio, 48000, reset=False)
+    outputs = [adapter(audio, 48000, reset=False) for _ in range(8)]
 
-    assert result.shape == audio.shape
-    assert np.max(np.abs(result)) > 0
-    assert board.resets == [True]
-    assert manager._state["processing_mode"] == "pedalboard-block-reset"
+    assert all(output.shape == audio.shape for output in outputs)
+    assert max(float(np.max(np.abs(output))) for output in outputs) > 0.1
+    assert 1 <= len(board.resets) < len(outputs)
+    assert all(board.resets)
+    assert manager._state["processing_mode"] == "pedalboard-overlap-add"
+    assert manager._state["pitch_window_frames"] == 4096
+    assert manager._state["estimated_latency_ms"] > 100
 
 
 def test_audio_environment_detects_input_without_dsp_output() -> None:
@@ -152,6 +158,27 @@ def test_audio_environment_detects_input_without_dsp_output() -> None:
     assert rows["signal.chrome_to_cable"]["status"] == "pass"
     assert rows["signal.dsp_output"]["status"] == "fail"
     assert result["instructions"]["douyin_microphone"] == "CABLE-B Output"
+
+
+def test_audio_environment_treats_idle_signal_as_information_not_warning() -> None:
+    doctor = AudioEnvironmentDoctor(_FakeAgent(_FakeDSP(-96.0, -96.0)))
+    result = doctor.check()
+    rows = {row["id"]: row for row in result["checks"]}
+
+    assert rows["signal.chrome_to_cable"]["status"] == "info"
+    assert rows["signal.dsp_output"]["status"] == "info"
+    assert result["signal_validation_required"] is True
+
+
+def test_audio_environment_live_signal_verification_passes() -> None:
+    doctor = AudioEnvironmentDoctor(_FakeAgent(_FakeDSP(-18.0, -20.0)))
+
+    result = doctor.verify_signal(1.0)
+
+    assert result["ok"] is True
+    assert result["status"] == "ready"
+    assert result["input_peak_dbfs"] == -18.0
+    assert result["output_peak_dbfs"] == -20.0
 
 
 def test_audio_environment_apply_updates_aliver_and_vtube_routes() -> None:
@@ -171,14 +198,16 @@ def test_audio_environment_apply_updates_aliver_and_vtube_routes() -> None:
     assert result["applied"]["chrome_system_route"] is False
 
 
-def test_ui_exposes_environment_doctor_and_silent_output_guard() -> None:
+def test_ui_exposes_environment_doctor_and_live_signal_check() -> None:
     script = (ROOT / "app/static/realtime_voice_dsp_ui_patch.js").read_text(
         encoding="utf-8"
     )
 
     assert "一键检查并修复" in script
+    assert "播放中验证信号" in script
     assert "audio.environment.check" in script
     assert "audio.environment.apply" in script
+    assert "audio.environment.verify_signal" in script
     assert "audio.environment.open_windows_settings" in script
     assert "input_without_output" in script
     assert "处理后输出为静音" in script

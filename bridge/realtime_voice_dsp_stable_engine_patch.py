@@ -16,7 +16,11 @@ def _is_running(manager: Any) -> bool:
     )
 
 
-def _candidate_rates(config: dict[str, Any], input_info: dict, output_info: dict) -> list[int]:
+def _candidate_rates(
+    config: dict[str, Any],
+    input_info: dict,
+    output_info: dict,
+) -> list[int]:
     values = [
         config.get("sample_rate"),
         input_info.get("defaultSampleRate"),
@@ -35,7 +39,11 @@ def _candidate_rates(config: dict[str, Any], input_info: dict, output_info: dict
     return result
 
 
-def _normalise_processed(samples: np.ndarray, channels: int, frames: int) -> np.ndarray:
+def _normalise_processed(
+    samples: np.ndarray,
+    channels: int,
+    frames: int,
+) -> np.ndarray:
     value = np.asarray(samples, dtype=np.float32)
     if value.ndim == 1:
         value = value[np.newaxis, :]
@@ -100,7 +108,12 @@ def install_realtime_voice_dsp_stable_engine_patch() -> None:
             "status": self.status(),
         }
 
-    def configure(self: Any, values: dict[str, Any], *, persist: bool = True) -> dict[str, Any]:
+    def configure(
+        self: Any,
+        values: dict[str, Any],
+        *,
+        persist: bool = True,
+    ) -> dict[str, Any]:
         with self._lock:
             previous = dict(self._config)
             merged = {**self._config, **dict(values or {})}
@@ -110,7 +123,9 @@ def install_realtime_voice_dsp_stable_engine_patch() -> None:
             else:
                 merged = dsp.normalize_dsp_config(merged)
             restart_keys = {"input_device_key", "output_device_key", "block_size"}
-            needs_restart = any(previous.get(key) != merged.get(key) for key in restart_keys)
+            needs_restart = any(
+                previous.get(key) != merged.get(key) for key in restart_keys
+            )
             self._config = merged
             if persist:
                 self._save_config()
@@ -179,29 +194,40 @@ def install_realtime_voice_dsp_stable_engine_patch() -> None:
                         selected_channels = channels
                         break
                     except Exception as exc:
-                        attempts.append(f"{rate}Hz/{channels}ch: {type(exc).__name__}: {exc}")
+                        attempts.append(
+                            f"{rate}Hz/{channels}ch: {type(exc).__name__}: {exc}"
+                        )
                 if stream is not None:
                     break
             if stream is None:
                 raise RuntimeError(
-                    "无法以共同采样率打开 DSP 输入/输出：" + "；".join(attempts[-6:])
+                    "无法以共同采样率打开 DSP 输入/输出："
+                    + "；".join(attempts[-6:])
                 )
 
             self._stream = stream
             stream.start_stream()
+            io_latency_ms = round(block_size / selected_rate * 2000.0, 2)
             with self._lock:
                 self._state.update(
                     {
                         "status": "running",
                         "running": True,
                         "started_at": dsp.utc_iso(),
-                        "stream_engine": "pyaudiowpatch-single-full-duplex",
-                        "stream_input_name": str(input_info.get("name") or input_device.get("name") or ""),
-                        "stream_output_name": str(output_info.get("name") or output_device.get("name") or ""),
+                        "stream_engine": (
+                            "pyaudiowpatch-single-full-duplex-overlap-add"
+                        ),
+                        "stream_input_name": str(
+                            input_info.get("name") or input_device.get("name") or ""
+                        ),
+                        "stream_output_name": str(
+                            output_info.get("name") or output_device.get("name") or ""
+                        ),
                         "sample_rate": selected_rate,
                         "channels": selected_channels,
                         "block_size": block_size,
-                        "estimated_latency_ms": round(block_size / selected_rate * 2000.0, 2),
+                        "io_latency_ms": io_latency_ms,
+                        "estimated_latency_ms": io_latency_ms,
                         "monitor_error": None,
                         "blocks_processed": 0,
                     }
@@ -222,9 +248,16 @@ def install_realtime_voice_dsp_stable_engine_patch() -> None:
                 with self._lock:
                     board = self._active_board()
                 processed = board(original, selected_rate, reset=False)
-                processed = _normalise_processed(processed, selected_channels, block_size)
+                processed = _normalise_processed(
+                    processed,
+                    selected_channels,
+                    block_size,
+                )
                 try:
-                    stream.write(processed.T.tobytes(), exception_on_underflow=False)
+                    stream.write(
+                        processed.T.tobytes(),
+                        exception_on_underflow=False,
+                    )
                 except TypeError:
                     stream.write(processed.T.tobytes())
 

@@ -5,6 +5,7 @@ import csv
 import io
 import os
 import subprocess
+import time
 from typing import Any
 
 from bridge import agent
@@ -116,6 +117,7 @@ class AudioEnvironmentDoctor:
             )
 
         rates: list[int] = []
+        rate_rows: list[str] = []
         for row in (raw, gpt_in, processed):
             endpoints = (
                 row.get("playback"),
@@ -124,7 +126,9 @@ class AudioEnvironmentDoctor:
             )
             for endpoint in endpoints:
                 if isinstance(endpoint, dict) and endpoint.get("default_sample_rate"):
-                    rates.append(int(endpoint["default_sample_rate"]))
+                    rate = int(endpoint["default_sample_rate"])
+                    rates.append(rate)
+                    rate_rows.append(f"{endpoint.get('name')}: {rate} Hz")
         unique_rates = sorted(set(rates))
         checks.append(
             _check(
@@ -134,8 +138,9 @@ class AudioEnvironmentDoctor:
                 "全部端点为 48000 Hz。"
                 if unique_rates == [48000]
                 else (
-                    f"检测到采样率 {unique_rates or ['未知']}，"
-                    "建议所有 CABLE 端点统一为 48000 Hz。"
+                    f"检测到采样率 {unique_rates or ['未知']}。当前 DSP 会优先以共同的 "
+                    "48000 Hz 运行，但 Windows 仍可能重采样。请把六个 CABLE 播放/录音端"
+                    "的高级格式统一为 48000 Hz。"
                 ),
                 automatic=False,
             )
@@ -172,10 +177,13 @@ class AudioEnvironmentDoctor:
             _check(
                 "signal.chrome_to_cable",
                 "Chrome / ChatGPT → 标准 CABLE",
-                "pass" if input_active else "warn",
+                "pass" if input_active else "info",
                 f"检测到输入电平 {input_dbfs:.1f} dBFS。"
                 if input_active
-                else "当前没有输入信号；播放朗读后仍无电平时，请检查 Chrome 输出设备。",
+                else (
+                    "当前没有正在播放的语音，因此不判定为错误。开始 ChatGPT 朗读后，"
+                    "请使用“播放中验证信号”进行动态验证。"
+                ),
                 automatic=False,
             )
         )
@@ -183,13 +191,20 @@ class AudioEnvironmentDoctor:
             _check(
                 "signal.dsp_output",
                 "DSP → CABLE-B 输出",
-                "pass" if output_active else "fail" if input_active else "warn",
+                "pass"
+                if output_active
+                else "fail"
+                if input_active
+                else "info",
                 f"检测到处理后电平 {output_dbfs:.1f} dBFS。"
                 if output_active
                 else "输入已有声音，但处理后输出为静音。"
                 if input_active
-                else "等待输入声音后才能验证处理后输出。",
-                automatic=True,
+                else (
+                    "当前没有输入语音，暂不判定输出状态。开始朗读后使用"
+                    "“播放中验证信号”。"
+                ),
+                automatic=False,
             )
         )
 
@@ -259,6 +274,8 @@ class AudioEnvironmentDoctor:
             "status": "failed" if failed else "warning" if warned else "ready",
             "checks": checks,
             "dsp_status": dsp_status,
+            "sample_rate_endpoints": rate_rows,
+            "signal_validation_required": not input_active,
             "instructions": {
                 "chrome_output": dict(raw.get("playback") or {}).get("name"),
                 "chatgpt_microphone": dict(gpt_in.get("microphone") or {}).get("name"),
@@ -273,6 +290,67 @@ class AudioEnvironmentDoctor:
                 ),
                 "虚拟声卡高级格式（采样率/位深）只检查，不在直播运行时强制修改。",
             ],
+        }
+
+    def verify_signal(self, seconds: float = 5.0) -> dict[str, Any]:
+        wait_seconds = max(1.0, min(float(seconds or 5.0), 10.0))
+        deadline = time.monotonic() + wait_seconds
+        peak_input = -96.0
+        peak_output = -96.0
+        samples = 0
+        running = False
+        priming_seen = False
+
+        while time.monotonic() < deadline:
+            status = self._dsp().status()
+            running = bool(status.get("running"))
+            if not running:
+                return {
+                    "ok": False,
+                    "status": "failed",
+                    "input_peak_dbfs": peak_input,
+                    "output_peak_dbfs": peak_output,
+                    "detail": "实时 DSP 尚未启动。请先启动 DSP，再播放 ChatGPT 朗读。",
+                }
+            peak_input = max(peak_input, float(status.get("input_dbfs") or -96.0))
+            peak_output = max(peak_output, float(status.get("output_dbfs") or -96.0))
+            priming_seen = priming_seen or bool(
+                dict(status.get("signal_diagnosis") or {}).get("priming")
+            )
+            samples += 1
+            if peak_input > -70.0 and peak_output > -70.0:
+                break
+            time.sleep(0.1)
+
+        input_active = peak_input > -70.0
+        output_active = peak_output > -70.0
+        if input_active and output_active:
+            state = "ready"
+            detail = (
+                f"实时链路正常：输入峰值 {peak_input:.1f} dBFS，"
+                f"处理后峰值 {peak_output:.1f} dBFS。"
+            )
+        elif input_active:
+            state = "failed"
+            detail = (
+                f"标准 CABLE 已收到声音（{peak_input:.1f} dBFS），但 CABLE-B 输出仍为"
+                f" {peak_output:.1f} dBFS。请检查 DSP 处理状态。"
+            )
+        else:
+            state = "idle"
+            detail = (
+                "验证期间没有检测到 ChatGPT 语音。请先开始朗读或 Voice 回答，再立即点击"
+                "“播放中验证信号”。"
+            )
+        return {
+            "ok": input_active and output_active,
+            "status": state,
+            "running": running,
+            "input_peak_dbfs": round(peak_input, 2),
+            "output_peak_dbfs": round(peak_output, 2),
+            "samples": samples,
+            "priming_seen": priming_seen,
+            "detail": detail,
         }
 
     def apply(self) -> dict[str, Any]:
@@ -350,6 +428,11 @@ def install_audio_environment_patch() -> None:
             return await asyncio.to_thread(_doctor(self).check)
         if command_type == "audio.environment.apply":
             return await asyncio.to_thread(_doctor(self).apply)
+        if command_type == "audio.environment.verify_signal":
+            return await asyncio.to_thread(
+                _doctor(self).verify_signal,
+                float((payload or {}).get("seconds") or 5.0),
+            )
         if command_type == "audio.environment.open_windows_settings":
             return await asyncio.to_thread(
                 _doctor(self).open_windows_audio_settings
@@ -361,6 +444,7 @@ def install_audio_environment_patch() -> None:
         for item in (
             "audio.environment.check",
             "audio.environment.apply",
+            "audio.environment.verify_signal",
             "audio.environment.open_windows_settings",
         ):
             if item not in values:

@@ -8,8 +8,8 @@ def _read(relative: str) -> str:
 
 
 def test_version_pair_is_bumped_for_realtime_dsp_release():
-    assert '__version__ = "0.16.1"' in _read("app/__init__.py")
-    assert 'BRIDGE_PATCH_VERSION = "0.12.0"' in _read("bridge/startup_retry_patch.py")
+    assert '__version__ = "0.16.2"' in _read("app/__init__.py")
+    assert 'BRIDGE_PATCH_VERSION = "0.12.1"' in _read("bridge/startup_retry_patch.py")
     assert 'BRIDGE_VERSION = "0.12.0"' in _read("bridge/agent_sync.py")
     assert '"version": "0.1.4"' in _read("chrome_extension/manifest.json")
 
@@ -59,8 +59,8 @@ def test_live_audio_setup_exposes_lipsync_tts_and_dsp_commands():
 def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
     patch = _read("app/static/wgc_hwnd_ui_patch.js")
 
-    assert "const EXPECTED_BRIDGE_VERSION = '0.12.0'" in patch
-    assert "const SERVER_VERSION = '0.16.1'" in patch
+    assert "const EXPECTED_BRIDGE_VERSION = '0.12.1'" in patch
+    assert "const SERVER_VERSION = '0.16.2'" in patch
     assert "new MutationObserver" in patch
     assert "queueMicrotask" in patch
     assert "setInterval(applyVersionState" not in patch
