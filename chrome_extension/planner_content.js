@@ -225,6 +225,10 @@
   }
 
   const listener = (message, sender, sendResponse) => {
+    if (message.type === 'aliver.plan.probe') {
+      sendResponse({ ok: true, data: { version: VERSION, busy: state.busy } });
+      return false;
+    }
     if (message.type !== 'aliver.plan.generate') return false;
     generatePlan(message.payload || {})
       .then(data => sendResponse({ ok: true, data }))
