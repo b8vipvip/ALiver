@@ -149,18 +149,26 @@ def test_audio_environment_detects_input_without_dsp_output() -> None:
 
 
 def test_audio_environment_apply_updates_aliver_and_vtube_routes() -> None:
-    agent = _FakeAgent()
-    result = AudioEnvironmentDoctor(agent).apply()
+    fake_agent = _FakeAgent()
+    result = AudioEnvironmentDoctor(fake_agent).apply()
 
-    assert agent.realtime_voice_dsp.configured["input_device_key"] == "vb-cable-input"
-    assert agent.realtime_voice_dsp.configured["output_device_key"] == "vb-cable-b-output"
-    assert agent.vtube_studio.sessions["one"].config["audio_device_name"] == "CABLE-B Output"
+    assert fake_agent.realtime_voice_dsp.configured["input_device_key"] == (
+        "vb-cable-input"
+    )
+    assert fake_agent.realtime_voice_dsp.configured["output_device_key"] == (
+        "vb-cable-b-output"
+    )
+    assert fake_agent.vtube_studio.sessions["one"].config[
+        "audio_device_name"
+    ] == "CABLE-B Output"
     assert result["applied"]["vtube_sessions"] == 1
     assert result["applied"]["chrome_system_route"] is False
 
 
 def test_ui_exposes_environment_doctor_and_silent_output_guard() -> None:
-    script = (ROOT / "app/static/realtime_voice_dsp_ui_patch.js").read_text(encoding="utf-8")
+    script = (ROOT / "app/static/realtime_voice_dsp_ui_patch.js").read_text(
+        encoding="utf-8"
+    )
 
     assert "一键检查并修复" in script
     assert "audio.environment.check" in script
@@ -171,11 +179,16 @@ def test_ui_exposes_environment_doctor_and_silent_output_guard() -> None:
 
 
 def test_windows_reset_noise_filter_is_narrow() -> None:
+    class WindowsReset(ConnectionResetError):
+        winerror = 10054
+
     harmless = {
-        "message": "Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)",
-        "exception": ConnectionResetError(10054, "reset"),
+        "message": (
+            "Exception in callback "
+            "_ProactorBasePipeTransport._call_connection_lost(None)"
+        ),
+        "exception": WindowsReset("reset"),
     }
-    harmless["exception"].winerror = 10054
     unrelated = {
         "message": "application task failed",
         "exception": RuntimeError("boom"),
