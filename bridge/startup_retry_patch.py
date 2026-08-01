@@ -7,7 +7,7 @@ import httpx
 
 from bridge.runtime_diagnostics import event, exception
 
-BRIDGE_PATCH_VERSION = "0.12.1"
+BRIDGE_PATCH_VERSION = "0.12.2"
 
 
 def install_bridge_startup_retry_patch() -> None:
