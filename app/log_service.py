@@ -30,5 +30,7 @@ def write_log(
     )
     db.add(row)
     db.commit()
-    db.refresh(row)
+    # expire_on_commit=False keeps generated fields available. Calling refresh()
+    # here would immediately open another read transaction; several WebSocket
+    # callers then await network I/O and could keep that transaction alive.
     return row
