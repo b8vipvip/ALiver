@@ -104,8 +104,8 @@ class _RealtimeBoardAdapter:
     def _process_window(self, channels: int, sample_rate: float) -> None:
         segment = self._input[:, : self._window_frames]
         rendered = self.board(segment, sample_rate, reset=True)
-        rendered_matrix = _matrix(rendered, channels, self._window_frames)
-        if not np.any(np.isfinite(rendered_matrix)) or rendered_matrix.size == 0:
+        raw_rendered = np.asarray(rendered)
+        if raw_rendered.size == 0 or not np.any(np.isfinite(raw_rendered)):
             rendered_matrix = segment.copy()
             with self.manager._lock:
                 self.manager._state["empty_output_recoveries"] = int(
@@ -114,6 +114,8 @@ class _RealtimeBoardAdapter:
                 self.manager._state["processing_mode"] = (
                     "pedalboard-overlap-add-dry-recovery"
                 )
+        else:
+            rendered_matrix = _matrix(rendered, channels, self._window_frames)
         rendered_matrix = np.nan_to_num(
             rendered_matrix,
             nan=0.0,
@@ -156,6 +158,9 @@ class _RealtimeBoardAdapter:
 
         if not self.pitch_enabled:
             result = self.board(source, sample_rate, reset=reset)
+            raw_result = np.asarray(result)
+            if raw_result.size == 0:
+                result = source
             with self.manager._lock:
                 self.manager._state.update(
                     {
