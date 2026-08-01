@@ -65,8 +65,11 @@ def _registration_metadata(instance: Any, bridge_version: str) -> dict[str, Any]
     return value
 
 
-async def _hard_timeout(awaitable: Awaitable[Any], seconds: float = REGISTRATION_HARD_TIMEOUT_SECONDS) -> Any:
-    return await asyncio.wait_for(awaitable, timeout=max(1.0, float(seconds)))
+async def _hard_timeout(
+    awaitable: Awaitable[Any],
+    seconds: float = REGISTRATION_HARD_TIMEOUT_SECONDS,
+) -> Any:
+    return await asyncio.wait_for(awaitable, timeout=max(0.05, float(seconds)))
 
 
 def install_bridge_fast_startup_patch() -> None:
