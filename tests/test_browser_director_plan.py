@@ -26,7 +26,11 @@ def extension(*, version: str = "0.1.5", metadata: dict | None = None) -> Browse
 
 def valid_metadata(**overrides):
     value = {
-        "binding": {"bound": True, "valid": True, "conversationKey": "https://chatgpt.com/c/test"},
+        "binding": {
+            "bound": True,
+            "valid": True,
+            "conversationKey": "https://chatgpt.com/c/test",
+        },
         "composer_ready": True,
         "generating": False,
         "live_active": False,
@@ -57,13 +61,14 @@ def test_browser_planner_requires_explicit_valid_binding(monkeypatch):
     with pytest.raises(planner.BrowserDirectorPlanError, match="尚未绑定目标 ChatGPT 会话"):
         planner._validate_extension(extension(metadata={"composer_ready": True}))
 
+    invalid_binding = {
+        "bound": True,
+        "valid": False,
+        "reason": "已绑定标签页已经切换到另一个会话",
+    }
     with pytest.raises(planner.BrowserDirectorPlanError, match="已经切换"):
         planner._validate_extension(
-            extension(
-                metadata=valid_metadata(
-                    binding={"bound": True, "valid": False, "reason": "已绑定标签页已经切换到另一个会话"}
-                )
-            )
+            extension(metadata=valid_metadata(binding=invalid_binding))
         )
 
 
@@ -84,15 +89,19 @@ def test_browser_planner_rejects_old_or_offline_extension(monkeypatch):
 
     monkeypatch.setattr(planner.extension_hub, "is_connected", lambda _: True)
     with pytest.raises(planner.BrowserDirectorPlanError, match="版本过旧"):
-        planner._validate_extension(extension(version="0.1.4", metadata=valid_metadata()))
+        planner._validate_extension(
+            extension(version="0.1.4", metadata=valid_metadata())
+        )
 
 
 def test_planner_json_is_not_sent_to_voice_tts():
     assert _looks_like_director_plan(
-        '{"aliver_plan_request_id":"id","director_name":"D","show_title":"T","rundown":[]}'
+        '{"aliver_plan_request_id":"id","director_name":"D",'
+        '"show_title":"T","rundown":[]}'
     )
     assert _looks_like_director_plan(
-        '{"director_name":"D","show_title":"T","opening_script":"Hi","rundown":[]}'
+        '{"director_name":"D","show_title":"T",'
+        '"opening_script":"Hi","rundown":[]}'
     )
     assert not _looks_like_director_plan("大家好，欢迎来到直播间。")
 
@@ -100,9 +109,13 @@ def test_planner_json_is_not_sent_to_voice_tts():
 def test_browser_planner_assets_and_console_mode_are_wired():
     manifest = (ROOT / "chrome_extension/manifest.json").read_text(encoding="utf-8")
     entry = (ROOT / "chrome_extension/background_entry.js").read_text(encoding="utf-8")
-    background = (ROOT / "chrome_extension/planner_background_patch.js").read_text(encoding="utf-8")
+    background = (
+        ROOT / "chrome_extension/planner_background_patch.js"
+    ).read_text(encoding="utf-8")
     content = (ROOT / "chrome_extension/planner_content.js").read_text(encoding="utf-8")
-    console = (ROOT / "app/static/director_plan_generator.js").read_text(encoding="utf-8")
+    console = (
+        ROOT / "app/static/director_plan_generator.js"
+    ).read_text(encoding="utf-8")
 
     assert '"version": "0.1.5"' in manifest
     assert '"service_worker": "background_entry.js"' in manifest
