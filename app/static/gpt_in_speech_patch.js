@@ -32,8 +32,33 @@
 })();
 
 (() => {
-  const version = '0.16.0';
+  const version = '0.16.1';
+
+  document.documentElement.classList.add('aliver-shell-booting');
+  if (!document.getElementById('aliver-shell-boot-style')) {
+    const style = document.createElement('style');
+    style.id = 'aliver-shell-boot-style';
+    style.textContent = `
+      html.aliver-shell-booting body::before {
+        content: '正在加载 ALiver 控制台…';
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: grid;
+        place-items: center;
+        background: #07101b;
+        color: #dbeafe;
+        font: 600 16px/1.5 system-ui, sans-serif;
+      }
+      html.aliver-shell-booting .topbar,
+      html.aliver-shell-booting main { visibility: hidden !important; }
+    `;
+    document.head.appendChild(style);
+  }
+
   const assets = [
+    ['/static/request_timeout_patch.js', 'aliver-request-timeout-patch'],
+    ['/static/console_shell_v3.js', 'aliver-console-shell-v3'],
     ['/static/console_layout_v2.js', 'aliver-console-layout-v2'],
     ['/static/live_debug_validation_v2.js', 'aliver-live-debug-validation-v2'],
     ['/static/live_debug_recovery_ui.js', 'aliver-live-debug-recovery-ui'],
@@ -43,7 +68,6 @@
     ['/static/diagnostics_zh.js', 'aliver-diagnostics-zh'],
     ['/static/provider_catalog.js', 'aliver-provider-catalog-script'],
     ['/static/auto_director_refresh_fix.js', 'aliver-auto-director-refresh-fix'],
-    ['/static/console_shell_v3.js', 'aliver-console-shell-v3'],
     ['/static/live_run_console.js', 'aliver-live-run-console'],
     ['/static/native_voice_lab_v2.js', 'aliver-native-voice-lab-v2'],
     ['/static/realtime_voice_dsp_ui_patch.js', 'aliver-realtime-voice-dsp-ui-patch'],
@@ -59,6 +83,7 @@
     script.dataset.aliverVersion = version;
     script.addEventListener('error', () => {
       console.error(`ALiver 前端模块加载失败：${script.src}`);
+      document.documentElement.classList.remove('aliver-shell-booting');
       if (typeof toast === 'function') toast(`前端模块加载失败：${src}`, true);
     });
     document.body.appendChild(script);
