@@ -36,7 +36,7 @@ def test_registration_hard_timeout_is_enforced() -> None:
     async def slow():
         await asyncio.sleep(1)
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(asyncio.TimeoutError):
         asyncio.run(_hard_timeout(slow(), seconds=0.01))
 
 
