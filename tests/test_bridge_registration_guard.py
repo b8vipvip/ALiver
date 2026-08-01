@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bridge.fast_startup_patch import _hard_timeout, _registration_metadata
 from bridge import heartbeat_metadata_guard_patch as metadata_patch
+from bridge.fast_startup_patch import _hard_timeout, _registration_metadata
 
 
 def test_registration_metadata_never_calls_full_system_info() -> None:
