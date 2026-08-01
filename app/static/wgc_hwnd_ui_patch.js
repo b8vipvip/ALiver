@@ -1,6 +1,6 @@
 (() => {
   const EXPECTED_BRIDGE_VERSION = '0.12.0';
-  const SERVER_VERSION = '0.16.0';
+  const SERVER_VERSION = '0.16.1';
   let applying = false;
   let pending = false;
   let statusObserver = null;

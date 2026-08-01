@@ -8,7 +8,7 @@ def _read(relative: str) -> str:
 
 
 def test_version_pair_is_bumped_for_realtime_dsp_release():
-    assert '__version__ = "0.16.0"' in _read("app/__init__.py")
+    assert '__version__ = "0.16.1"' in _read("app/__init__.py")
     assert 'BRIDGE_PATCH_VERSION = "0.12.0"' in _read("bridge/startup_retry_patch.py")
     assert 'BRIDGE_VERSION = "0.12.0"' in _read("bridge/agent_sync.py")
     assert '"version": "0.1.4"' in _read("chrome_extension/manifest.json")
@@ -19,6 +19,7 @@ def test_bootstrap_loader_wires_live_debug_and_operations_workspaces():
     layout = _read("app/static/console_layout_v2.js")
     validation = _read("app/static/live_debug_validation_v2.js")
 
+    assert "/static/request_timeout_patch.js" in loader
     assert "/static/console_layout_v2.js" in loader
     assert "/static/live_debug_validation.js" not in loader
     assert "/static/live_debug_validation_v2.js" in loader
@@ -29,6 +30,7 @@ def test_bootstrap_loader_wires_live_debug_and_operations_workspaces():
     assert "/static/live_run_console.js" in loader
     assert "/static/native_voice_lab_v2.js" in loader
     assert "/static/realtime_voice_dsp_ui_patch.js" in loader
+    assert "/static/dsp_doctor_feedback_patch.js" in loader
     assert "/static/console_refinement_v4.js" in loader
     assert "/static/voice_lab.js" not in loader
     assert "tab-simli-tuning" in layout
@@ -58,7 +60,7 @@ def test_wgc_version_patch_uses_observer_instead_of_competing_timer():
     patch = _read("app/static/wgc_hwnd_ui_patch.js")
 
     assert "const EXPECTED_BRIDGE_VERSION = '0.12.0'" in patch
-    assert "const SERVER_VERSION = '0.16.0'" in patch
+    assert "const SERVER_VERSION = '0.16.1'" in patch
     assert "new MutationObserver" in patch
     assert "queueMicrotask" in patch
     assert "setInterval(applyVersionState" not in patch

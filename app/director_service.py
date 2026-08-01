@@ -38,12 +38,21 @@ async def dispatch_command(db: Session, row: DirectorCommand) -> bool:
         row.status = "queued"
         db.commit()
         return False
-    await extension_hub.send_command(
-        row.extension_id,
-        command_id=row.id,
-        command_type=row.command_type,
-        payload=loads(row.payload_json, {}),
-    )
+
+    # The network send must not inherit an open SQLite transaction from the
+    # caller's SELECT. The browser may be busy for seconds, and holding that
+    # transaction previously blocked Bridge and extension heartbeat commits.
+    db.commit()
+    try:
+        await extension_hub.send_command(
+            row.extension_id,
+            command_id=row.id,
+            command_type=row.command_type,
+            payload=loads(row.payload_json, {}),
+        )
+    except Exception:
+        db.rollback()
+        raise
     row.status = "dispatched"
     row.dispatched_at = utcnow()
     row.error_message = None
@@ -62,6 +71,9 @@ async def dispatch_queued(db: Session, extension_id: str, *, limit: int = 50) ->
         .order_by(DirectorCommand.priority.desc(), DirectorCommand.created_at.asc())
         .limit(limit)
     ).all()
+    # Release the read snapshot before the first WebSocket await. SessionLocal
+    # uses expire_on_commit=False, so the loaded command values remain usable.
+    db.commit()
     sent = 0
     for row in rows:
         try:
@@ -79,6 +91,9 @@ def requeue_dispatched(db: Session, extension_id: str) -> int:
             DirectorCommand.status == "dispatched",
         )
     ).all()
+    if not rows:
+        db.rollback()
+        return 0
     for row in rows:
         row.status = "queued"
         row.dispatched_at = None
