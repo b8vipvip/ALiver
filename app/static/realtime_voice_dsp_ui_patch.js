@@ -196,16 +196,19 @@
     panel.innerHTML = `
       <hr>
       <h3>音频环境自动检查</h3>
-      <p class="hint">自动修复 ALiver、DSP 和 ALiver 管理的 VTube Studio 路由；检测 Chrome、直播伴侣和 Windows 虚拟声卡设置。</p>
+      <p class="hint">静态检查负责设备、采样率和路由；实时信号必须在 ChatGPT 正在朗读或说话时单独验证。</p>
       <div class="actions">
         <button id="dsp-env-apply" type="button">一键检查并修复</button>
         <button id="dsp-env-check" type="button" class="secondary">仅检查</button>
+        <button id="dsp-env-signal" type="button" class="secondary">播放中验证信号</button>
         <button id="dsp-env-settings" type="button" class="secondary">打开 Windows 音量设置</button>
       </div>
-      <div id="dsp-env-result" class="diagnosis warn">尚未检查完整音频环境。</div>`;
+      <div id="dsp-env-result" class="diagnosis warn">尚未检查完整音频环境。</div>
+      <div id="dsp-signal-result" class="diagnosis warn" style="margin-top:8px">开始 ChatGPT 朗读后，点击“播放中验证信号”。</div>`;
     parent.insertBefore(panel, anchor.nextSibling);
     document.getElementById('dsp-env-apply')?.addEventListener('click', () => runDoctor(true));
     document.getElementById('dsp-env-check')?.addEventListener('click', () => runDoctor(false));
+    document.getElementById('dsp-env-signal')?.addEventListener('click', runSignalCheck);
     document.getElementById('dsp-env-settings')?.addEventListener('click', openWindowsSettings);
   }
 
@@ -213,7 +216,7 @@
     const box = document.getElementById('dsp-env-result');
     if (!box) return;
     const statusClass = result.status === 'ready' ? 'good' : result.status === 'failed' ? 'bad' : 'warn';
-    const icon = value => value === 'pass' ? '✅' : value === 'fail' ? '❌' : '⚠️';
+    const icon = value => value === 'pass' ? '✅' : value === 'fail' ? '❌' : value === 'info' ? 'ℹ️' : '⚠️';
     const rows = (result.checks || []).map(row =>
       `<div style="margin:6px 0"><strong>${icon(row.status)} ${esc(row.label)}</strong><br><span class="hint">${esc(row.detail)}${row.automatic ? '（可自动修复）' : ''}</span></div>`
     ).join('');
@@ -246,6 +249,43 @@
       if (result.dsp_status) showAutomaticEndpoints(result.dsp_status.input_device, result.dsp_status.output_device);
     } catch (error) {
       const box = document.getElementById('dsp-env-result');
+      if (box) {
+        box.className = 'diagnosis bad';
+        box.textContent = error.message;
+      }
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = old;
+      }
+    }
+  }
+
+  async function runSignalCheck() {
+    const button = document.getElementById('dsp-env-signal');
+    const box = document.getElementById('dsp-signal-result');
+    const old = button?.textContent || '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = '正在监听 5 秒…';
+    }
+    if (box) {
+      box.className = 'diagnosis warn';
+      box.textContent = '正在监听标准 CABLE 输入和 CABLE-B 处理后输出，请保持 ChatGPT 正在朗读。';
+    }
+    try {
+      const bridgeId = await connectedBridge();
+      const result = await sendBridgeCommand(
+        bridgeId,
+        'audio.environment.verify_signal',
+        { seconds: 5 },
+        12,
+      );
+      if (box) {
+        box.className = `diagnosis ${result.status === 'ready' ? 'good' : result.status === 'failed' ? 'bad' : 'warn'}`;
+        box.innerHTML = `<strong>${result.status === 'ready' ? '实时信号验证通过' : result.status === 'failed' ? '实时信号验证失败' : '未捕获到播放信号'}</strong><br>${esc(result.detail)}<br>输入峰值：${esc(result.input_peak_dbfs)} dBFS；输出峰值：${esc(result.output_peak_dbfs)} dBFS。`;
+      }
+    } catch (error) {
       if (box) {
         box.className = 'diagnosis bad';
         box.textContent = error.message;
