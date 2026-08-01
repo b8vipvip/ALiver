@@ -10,10 +10,12 @@ app.__version__ = SERVER_VERSION
 from app import main as app_main  # noqa: E402
 from app.api import native_voice  # noqa: E402
 from app.live_run_native_voice_patch import install_live_run_native_voice_patch  # noqa: E402
+from app.windows_asyncio_noise_patch import install_windows_asyncio_noise_filter  # noqa: E402
 
 application = app_main.app
 application.include_router(native_voice.router)
 install_live_run_native_voice_patch()
+install_windows_asyncio_noise_filter(application)
 settings = app_main.settings
 # A first-time VTube Studio token request intentionally waits for the user to
 # approve the plugin inside VTube Studio. Keep the server-to-Bridge request
