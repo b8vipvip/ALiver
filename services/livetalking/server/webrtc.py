@@ -170,7 +170,8 @@ def player_worker_thread(
 class HumanPlayer:
 
     def __init__(
-        self, avatar_session, format=None, options=None, timeout=None, loop=False, decode=True
+        self, avatar_session, format=None, options=None, timeout=None, loop=False, decode=True,
+        audio_enabled=True,
     ):
         self.__thread: Optional[threading.Thread] = None
         self.__thread_quit: Optional[threading.Event] = None
@@ -180,7 +181,9 @@ class HumanPlayer:
         self.__audio: Optional[PlayerStreamTrack] = None
         self.__video: Optional[PlayerStreamTrack] = None
 
-        self.__audio = PlayerStreamTrack(self, kind="audio")
+        self.__audio = (
+            PlayerStreamTrack(self, kind="audio") if audio_enabled else None
+        )
         self.__video = PlayerStreamTrack(self, kind="video")
 
         self.__container = avatar_session
@@ -193,11 +196,27 @@ class HumanPlayer:
         self.__video._queue.put((new_frame, None))
 
     def push_audio(self, frame, eventpoint=None):
+        if self.__audio is None:
+            return
         from av import AudioFrame
         new_frame = AudioFrame(format='s16', layout='mono', samples=frame.shape[0])
         new_frame.planes[0].update(frame.tobytes())
         new_frame.sample_rate = 16000
         self.__audio._queue.put((new_frame, eventpoint))
+
+    def clear_queues(self) -> dict:
+        cleared = {}
+        for name, track in (("audio", self.__audio), ("video", self.__video)):
+            count = 0
+            if track is not None:
+                while not track._queue.empty():
+                    try:
+                        track._queue.get_nowait()
+                        count += 1
+                    except queue.Empty:
+                        break
+            cleared[name] = count
+        return cleared
 
     def get_buffer_size(self) -> int:
         return self.__video._queue.qsize()

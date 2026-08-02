@@ -6,6 +6,7 @@ import json
 import asyncio
 import random
 import copy
+import os
 from typing import Dict, Optional
 import queue
 
@@ -71,19 +72,27 @@ class RTCManager:
                 self.pcs.discard(pc)
                 session_manager.remove_session(sessionid)
 
-        # 添加发送轨道
+        # 添加发送轨道。ALiver 默认只返回视频，直播声音继续由 CABLE-B 唯一路径输出。
         from server.webrtc import HumanPlayer
-        player = HumanPlayer(avatar_session)
-        pc.addTrack(player.audio)
+        env_video_only = os.environ.get('ALIVER_VIDEO_ONLY', '1').strip().lower() not in {'0', 'false', 'no'}
+        video_only = bool(params.get('video_only', env_video_only))
+        player = HumanPlayer(avatar_session, audio_enabled=not video_only)
+        if not video_only:
+            pc.addTrack(player.audio)
         pc.addTrack(player.video)
+        logger.info('ALiver WebRTC session %s video_only=%s', sessionid, video_only)
 
         # 设置编解码器偏好
         capabilities = RTCRtpSender.getCapabilities("video")
         preferences = list(filter(lambda x: x.name == "H264", capabilities.codecs))
         preferences += list(filter(lambda x: x.name == "VP8", capabilities.codecs))
         preferences += list(filter(lambda x: x.name == "rtx", capabilities.codecs))
-        transceiver = pc.getTransceivers()[1]
-        transceiver.setCodecPreferences(preferences)
+        transceiver = next(
+            (item for item in pc.getTransceivers() if getattr(item, 'kind', None) == 'video'),
+            None,
+        )
+        if transceiver is not None:
+            transceiver.setCodecPreferences(preferences)
 
         await pc.setRemoteDescription(offer)
 
@@ -116,8 +125,10 @@ class RTCManager:
                 self.pcs.discard(pc)
 
         from server.webrtc import HumanPlayer
-        player = HumanPlayer(avatar_session)
-        pc.addTrack(player.audio)
+        video_only = os.environ.get('ALIVER_VIDEO_ONLY', '1').strip().lower() not in {'0', 'false', 'no'}
+        player = HumanPlayer(avatar_session, audio_enabled=not video_only)
+        if not video_only:
+            pc.addTrack(player.audio)
         pc.addTrack(player.video)
 
         await pc.setLocalDescription(await pc.createOffer())

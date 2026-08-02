@@ -32,6 +32,7 @@ def json_error(msg: str, code: int = -1):
 
 from server.session_manager import session_manager
 from server.avatar_routes import setup_avatar_routes
+from aliver_integration import setup_aliver_routes
 
 def get_session(request, sessionid: str):
     """从 app 中获取 session 实例"""
@@ -256,5 +257,8 @@ def setup_routes(app):
 
     # 注册 avatar 生成相关的路由
     setup_avatar_routes(app)
+
+    # ALiver: authenticated realtime PCM input and health endpoints.
+    setup_aliver_routes(app)
 
     app.router.add_static('/', path='web')
