@@ -3,6 +3,7 @@
 
 Model weights, avatar datasets, recordings and large media files are deliberately
 excluded. The resulting tree is ordinary repository content, not a git submodule.
+ALiver-owned integration files are preserved across upstream refreshes.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ import shutil
 import tarfile
 import urllib.request
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO
 
 DEFAULT_REPOSITORY = "lipku/LiveTalking"
 DEFAULT_REF = "main"
@@ -55,6 +55,14 @@ EXCLUDED_SUFFIXES = {
     ".tar",
     ".7z",
 }
+ALIVER_OWNED_PATHS = (
+    Path("aliver_integration"),
+    Path("Dockerfile.aliver"),
+    Path("docker-compose.aliver.yml"),
+    Path(".env.aliver.example"),
+    Path("ALIVER_DEPLOYMENT.md"),
+    Path("web/aliver.html"),
+)
 
 
 def _headers() -> dict[str, str]:
@@ -88,8 +96,9 @@ def _extract_archive(archive: bytes, destination: Path) -> Path:
     shutil.rmtree(destination, ignore_errors=True)
     destination.mkdir(parents=True)
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as handle:
-        members = [member for member in handle.getmembers() if _safe_member(member)]
-        if len(members) != len(handle.getmembers()):
+        all_members = handle.getmembers()
+        members = [member for member in all_members if _safe_member(member)]
+        if len(members) != len(all_members):
             raise RuntimeError("Unsafe path found in upstream archive")
         handle.extractall(destination, members=members, filter="data")
     roots = [item for item in destination.iterdir() if item.is_dir()]
@@ -100,11 +109,41 @@ def _extract_archive(archive: bytes, destination: Path) -> Path:
 
 def _excluded(relative: Path, size: int) -> bool:
     posix = relative.as_posix()
-    if any(posix == value or posix.startswith(value + "/") for value in EXCLUDED_DIRECTORIES):
+    if any(
+        posix == value or posix.startswith(value + "/")
+        for value in EXCLUDED_DIRECTORIES
+    ):
         return True
     if relative.suffix.lower() in EXCLUDED_SUFFIXES:
         return True
     return size > MAX_FILE_BYTES
+
+
+def _copy_path(source: Path, target: Path) -> None:
+    if source.is_dir():
+        shutil.copytree(source, target, dirs_exist_ok=True)
+    elif source.is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def _preserve_aliver_overlay(destination: Path, overlay: Path) -> None:
+    shutil.rmtree(overlay, ignore_errors=True)
+    overlay.mkdir(parents=True)
+    for relative in ALIVER_OWNED_PATHS:
+        source = destination / relative
+        if source.exists():
+            _copy_path(source, overlay / relative)
+
+
+def _restore_aliver_overlay(destination: Path, overlay: Path) -> None:
+    if not overlay.exists():
+        return
+    for relative in ALIVER_OWNED_PATHS:
+        source = overlay / relative
+        if source.exists():
+            _copy_path(source, destination / relative)
+    shutil.rmtree(overlay, ignore_errors=True)
 
 
 def vendor(repository: str, ref: str, destination: Path) -> dict:
@@ -117,6 +156,8 @@ def vendor(repository: str, ref: str, destination: Path) -> dict:
     archive_sha256 = hashlib.sha256(archive).hexdigest()
 
     temporary = destination.parent / ".livetalking-vendor-tmp"
+    overlay = destination.parent / ".livetalking-aliver-overlay"
+    _preserve_aliver_overlay(destination, overlay)
     source = _extract_archive(archive, temporary)
     shutil.rmtree(destination, ignore_errors=True)
     destination.mkdir(parents=True)
@@ -136,6 +177,8 @@ def vendor(repository: str, ref: str, destination: Path) -> dict:
         copied += 1
         copied_bytes += size
 
+    _restore_aliver_overlay(destination, overlay)
+
     license_path = destination / "LICENSE"
     if not license_path.exists():
         raise RuntimeError("Upstream LICENSE was not included")
@@ -150,6 +193,7 @@ def vendor(repository: str, ref: str, destination: Path) -> dict:
         "copied_bytes": copied_bytes,
         "license": "Apache-2.0",
         "excluded_directories": sorted(EXCLUDED_DIRECTORIES),
+        "preserved_aliver_paths": [item.as_posix() for item in ALIVER_OWNED_PATHS],
         "max_file_bytes": MAX_FILE_BYTES,
     }
     (destination / "UPSTREAM.json").write_text(
@@ -165,7 +209,8 @@ def vendor(repository: str, ref: str, destination: Path) -> dict:
         f"- Copied bytes: `{copied_bytes}`\n"
         f"- Archive SHA-256: `{archive_sha256}`\n\n"
         "Model weights, avatar datasets, recordings, large media and binary assets "
-        "are intentionally excluded. See `UPSTREAM_LICENSE`.\n",
+        "are intentionally excluded. ALiver-owned integration files are preserved. "
+        "See `UPSTREAM_LICENSE`.\n",
         encoding="utf-8",
     )
     shutil.rmtree(temporary, ignore_errors=True)
