@@ -4,20 +4,29 @@ on:
   push:
     branches:
       - feat/livetalking-pcm-cloud-adapter
-    paths:
-      - .github/workflows/vendor-livetalking.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: vendor-livetalking-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   vendor:
     if: ${{ !contains(github.event.head_commit.message || '', 'chore: vendor LiveTalking source') }}
     runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
       - name: Download and vendor upstream source
@@ -155,4 +164,4 @@ jobs:
             exit 0
           fi
           git commit -m "chore: vendor LiveTalking source"
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git push origin HEAD:${TARGET_BRANCH}
