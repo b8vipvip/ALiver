@@ -87,28 +87,34 @@ curl http://127.0.0.1:8010/api/aliver/health
 
 ## 3. 建立 WebRTC 数字人会话
 
-先用 LiveTalking WebRTC 页面或 ALiver 后续的 LiveTalking 预览器调用 `/offer`，请求参数需包含：
+ALiver 已附带一个只接收视频、不播放音频的预览页：
 
-```json
-{
-  "type": "offer",
-  "sdp": "...",
-  "video_only": true,
-  "avatar": "wav2lip256_avatar1"
-}
+```text
+https://your-domain.example/aliver.html?debug=1&avatar=wav2lip256_avatar1
 ```
 
-响应会返回：
+页面会自动完成 `/offer` 协商，并在左下角显示：
 
-```json
-{
-  "type": "answer",
-  "sdp": "...",
-  "sessionid": "123456"
-}
+```text
+sessionid: 123456
 ```
 
-将该 `sessionid` 配置到 Windows Bridge。WebRTC 页面必须持续保持连接；页面关闭后，对应 session 会被清理。
+页面还会把会话信息通过 `postMessage` 发送给父页面，并写入：
+
+```text
+localStorage.aliver_livetalking_session_id
+window.ALIVER_LIVETALKING_SESSION_ID
+```
+
+将该 `sessionid` 配置到 Windows Bridge。该页面必须持续保持连接；关闭或刷新页面后，旧会话会被 LiveTalking 清理，需要使用新生成的 `sessionid`。
+
+用于直播伴侣或 OBS 浏览器源时，可关闭调试信息：
+
+```text
+https://your-domain.example/aliver.html?debug=0&avatar=wav2lip256_avatar1
+```
+
+预览页的 `<video>` 固定为 `muted`，LiveTalking 服务端也默认不建立 WebRTC 音频轨，因此直播声音只能来自 ALiver 的 `CABLE-B Output`。
 
 ## 4. Windows Bridge 配置
 
@@ -194,7 +200,7 @@ python scripts/vendor_livetalking.py
 python scripts/apply_livetalking_aliver_patch.py
 ```
 
-第一条命令重新生成上游源码快照和 SHA 元数据；第二条命令重放 ALiver 维护的补丁。随后必须重新跑完整 CI 和 GPU 实机验证。
+第一条命令重新生成上游源码快照和 SHA 元数据，同时保留 `aliver_integration/`、部署文件和 `web/aliver.html`；第二条命令重放 ALiver 维护的上游补丁。随后必须重新跑完整 CI 和 GPU 实机验证。
 
 ## 尚未由 CI 验证的部分
 
