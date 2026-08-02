@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALiver LiveTalking Viewer</title>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; }
+    #status {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 10;
+      display: none;
+      max-width: calc(100% - 24px);
+      padding: 9px 11px;
+      border-radius: 9px;
+      background: rgba(0, 0, 0, .74);
+      color: #fff;
+      font: 13px/1.45 system-ui, sans-serif;
+      white-space: pre-wrap;
+      word-break: break-word;
+      pointer-events: none;
+    }
+    body.debug #status { display: block; }
+  </style>
+</head>
+<body>
+  <iframe id="cloud-frame" title="LiveTalking video-only viewer" allow="autoplay"></iframe>
+  <div id="status">正在读取 ALiver viewer 配置……</div>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      const key = params.get('key') || '';
+      const debug = params.get('debug') === '1';
+      if (debug) document.body.classList.add('debug');
+      const frame = document.getElementById('cloud-frame');
+      const status = document.getElementById('status');
+      let config = null;
+      let lastSessionId = '';
+      let handoffInFlight = false;
+
+      function notify(payload) {
+        const value = { type: 'aliver-livetalking-viewer', ...payload };
+        try { window.parent.postMessage(value, '*'); } catch (_) {}
+        try { window.opener?.postMessage(value, '*'); } catch (_) {}
+      }
+
+      function report(message, extra = {}) {
+        status.textContent = message;
+        notify({ message, ...extra });
+      }
+
+      async function jsonRequest(path, options = {}) {
+        const response = await fetch(path, { cache: 'no-store', ...options });
+        if (!response.ok) {
+          let detail = `${response.status} ${response.statusText}`;
+          try {
+            const body = await response.json();
+            detail = body.detail || body.error || JSON.stringify(body);
+          } catch (_) {}
+          throw new Error(detail);
+        }
+        return response.json();
+      }
+
+      async function loadConfig() {
+        if (!key) throw new Error('浏览器源 URL 缺少 viewer key');
+        config = await jsonRequest(`/api/livetalking-viewer/config?key=${encodeURIComponent(key)}`);
+        const url = new URL(`${config.base_url.replace(/\/$/, '')}/aliver.html`);
+        url.searchParams.set('debug', debug ? '1' : '0');
+        if (config.avatar_id) url.searchParams.set('avatar', config.avatar_id);
+        url.searchParams.set('_', String(Date.now()));
+        report('正在建立 video-only WebRTC 会话……');
+        frame.src = url.toString();
+      }
+
+      async function handoffSession(sessionId) {
+        if (!sessionId || sessionId === lastSessionId || handoffInFlight) return;
+        handoffInFlight = true;
+        report(`已获得 sessionid：${sessionId}\n正在交给 Windows Bridge……`, { session_id: sessionId });
+        try {
+          const value = await jsonRequest(
+            `/api/livetalking-viewer/session?key=${encodeURIComponent(key)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: sessionId }),
+            },
+          );
+          lastSessionId = sessionId;
+          const action = value.auto_started ? 'PCM 已自动启动' : 'PCM 配置已更新';
+          report(`${action}\nsessionid: ${sessionId}`, {
+            session_id: sessionId,
+            connected: true,
+            bridge_result: value,
+          });
+        } catch (error) {
+          report(`sessionid 交接失败：${error.message || error}`, {
+            session_id: sessionId,
+            error: String(error),
+          });
+        } finally {
+          handoffInFlight = false;
+        }
+      }
+
+      window.addEventListener('message', event => {
+        if (!config || event.source !== frame.contentWindow) return;
+        if (event.origin !== config.cloud_origin) return;
+        const data = event.data || {};
+        if (data.type === 'aliver-livetalking-session') {
+          handoffSession(String(data.session_id || ''));
+          return;
+        }
+        if (data.type === 'aliver-livetalking-status') {
+          report(data.message || 'LiveTalking 状态更新', {
+            session_id: data.session_id || lastSessionId,
+            connected: Boolean(data.connected),
+            error: data.error || null,
+          });
+        }
+      });
+
+      loadConfig().catch(error => {
+        report(`Viewer 初始化失败：${error.message || error}`, { error: String(error) });
+      });
+    })();
+  </script>
+</body>
+</html>
