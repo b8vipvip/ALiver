@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -21,11 +21,13 @@ from app.api import (
     douyin_live,
     health,
     live_runs,
+    livetalking_cloud,
     logs,
     providers,
     sessions,
     voice,
 )
+from app.auth import require_admin_token
 from app.auto_director_service import auto_director_worker
 from app.avatar_action_service import schedule_chatgpt_status
 from app.bridge_hub import bridge_hub
@@ -102,6 +104,12 @@ app.include_router(live_runs.router)
 app.include_router(voice.router)
 app.include_router(logs.router)
 app.include_router(dashboard.router)
+app.include_router(
+    livetalking_cloud.admin_router,
+    prefix="/api/dashboard",
+    dependencies=[Depends(require_admin_token)],
+)
+app.include_router(livetalking_cloud.public_router, prefix="/api")
 
 
 @app.get("/", response_class=HTMLResponse)
