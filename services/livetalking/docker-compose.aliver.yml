@@ -1,0 +1,45 @@
+services:
+  livetalking:
+    build:
+      context: .
+      dockerfile: Dockerfile.aliver
+    image: aliver-livetalking:local
+    restart: unless-stopped
+    network_mode: host
+    ipc: host
+    env_file:
+      - .env.aliver
+    environment:
+      ALIVER_STREAM_TOKEN: ${ALIVER_STREAM_TOKEN}
+      ALIVER_VIDEO_ONLY: ${ALIVER_VIDEO_ONLY:-1}
+      ALIVER_PCM_MAX_QUEUE_MS: ${ALIVER_PCM_MAX_QUEUE_MS:-400}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+    volumes:
+      - ./models:/opt/livetalking/models:ro
+      - ./data/avatars:/opt/livetalking/data/avatars:ro
+      - ./data/record:/opt/livetalking/data/record
+    command:
+      - python3
+      - app.py
+      - --transport
+      - webrtc
+      - --model
+      - ${LIVETALKING_MODEL:-wav2lip}
+      - --avatar_id
+      - ${LIVETALKING_AVATAR_ID:-wav2lip256_avatar1}
+      - --batch_size
+      - ${LIVETALKING_BATCH_SIZE:-8}
+      - --max_session
+      - ${LIVETALKING_MAX_SESSION:-1}
+      - --listenport
+      - ${LIVETALKING_LISTEN_PORT:-8010}
+      - --stun
+      - ${LIVETALKING_STUN:-stun:stun.freeswitch.org:3478}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
