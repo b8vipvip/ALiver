@@ -23,7 +23,7 @@ class StartMessage:
     audio_format: str = FORMAT
 
     @classmethod
-    def from_payload(cls, payload: Any) -> "StartMessage":
+    def from_payload(cls, payload: Any) -> StartMessage:
         if not isinstance(payload, dict) or payload.get("type") != "start":
             raise ValueError("首条消息必须是 type=start 的 JSON 控制帧")
         value = cls(
