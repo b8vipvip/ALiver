@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "ws_url": "wss://gpu.example.com/api/aliver/pcm",
+  "token": "replace-with-the-same-token-as-ALIVER_STREAM_TOKEN",
+  "session_id": "replace-after-creating-the-webrtc-session",
+  "verify_tls": true,
+  "max_queue_ms": 400,
+  "reconnect_min_seconds": 1.0,
+  "reconnect_max_seconds": 15.0
+}

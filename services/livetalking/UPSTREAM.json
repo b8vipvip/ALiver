@@ -1,0 +1,18 @@
+{
+  "upstream": "https://github.com/lipku/LiveTalking",
+  "ref": "main",
+  "commit": "a5a77f4c395c8347789a16da1843cd1b08b48eea",
+  "archive_sha256": "aba65b6f0c99fc3c1b1a451798ec14e9bd5e691e9357af27a1a4c67a45d49950",
+  "copied_files": 169,
+  "copied_bytes": 4027213,
+  "license": "Apache-2.0",
+  "excluded_directories": [
+    ".git",
+    ".github",
+    "__pycache__",
+    "data/avatars",
+    "data/record",
+    "models"
+  ],
+  "max_file_bytes": 2097152
+}

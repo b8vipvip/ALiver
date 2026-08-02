@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ALiver LiveTalking</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;background:transparent;overflow:hidden;font-family:system-ui,sans-serif}
+    video{width:100%;height:100%;object-fit:contain;background:transparent}
+    #status{position:fixed;left:12px;bottom:12px;max-width:calc(100% - 24px);padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.68);color:#fff;font-size:13px;white-space:pre-wrap;display:none}
+    body.debug #status{display:block}
+  </style>
+</head>
+<body>
+  <video id="avatar" autoplay playsinline muted></video>
+  <div id="status">正在连接……</div>
+  <script>
+    (() => {
+      const params = new URLSearchParams(location.search);
+      if (params.get('debug') === '1') document.body.classList.add('debug');
+      const video = document.getElementById('avatar');
+      const status = document.getElementById('status');
+      let pc = null;
+      let reconnectTimer = null;
+      let stopped = false;
+
+      function report(message, extra = {}) {
+        status.textContent = message;
+        const payload = {type: 'aliver-livetalking-status', message, ...extra};
+        try { window.parent.postMessage(payload, '*'); } catch (_) {}
+      }
+
+      async function waitIceComplete(connection, timeoutMs = 10000) {
+        if (connection.iceGatheringState === 'complete') return;
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, timeoutMs);
+          const handler = () => {
+            if (connection.iceGatheringState === 'complete') {
+              clearTimeout(timeout);
+              connection.removeEventListener('icegatheringstatechange', handler);
+              resolve();
+            }
+          };
+          connection.addEventListener('icegatheringstatechange', handler);
+        });
+      }
+
+      async function connect() {
+        clearTimeout(reconnectTimer);
+        if (pc) { try { pc.close(); } catch (_) {} }
+        report('正在建立 video-only WebRTC 会话……');
+        const connection = new RTCPeerConnection();
+        pc = connection;
+        connection.addTransceiver('video', {direction: 'recvonly'});
+        connection.ontrack = (event) => {
+          if (event.track.kind !== 'video') return;
+          video.srcObject = event.streams[0] || new MediaStream([event.track]);
+        };
+        connection.onconnectionstatechange = () => {
+          report(`WebRTC：${connection.connectionState}`);
+          if (!stopped && ['failed', 'disconnected', 'closed'].includes(connection.connectionState)) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connect, 2000);
+          }
+        };
+        try {
+          const offer = await connection.createOffer();
+          await connection.setLocalDescription(offer);
+          await waitIceComplete(connection);
+          const body = {
+            sdp: connection.localDescription.sdp,
+            type: connection.localDescription.type,
+            video_only: true
+          };
+          const avatar = params.get('avatar');
+          if (avatar) body.avatar = avatar;
+          const response = await fetch('/offer', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+          const answer = await response.json();
+          if (answer.code && answer.code !== 0) throw new Error(answer.msg || 'offer failed');
+          await connection.setRemoteDescription({type: answer.type, sdp: answer.sdp});
+          const sessionId = String(answer.sessionid || '');
+          window.ALIVER_LIVETALKING_SESSION_ID = sessionId;
+          localStorage.setItem('aliver_livetalking_session_id', sessionId);
+          report(`已连接\nsessionid: ${sessionId}`, {session_id: sessionId, connected: true});
+          try {
+            window.parent.postMessage({
+              type: 'aliver-livetalking-session',
+              session_id: sessionId,
+              origin: location.origin
+            }, '*');
+          } catch (_) {}
+        } catch (error) {
+          report(`连接失败：${error.message || error}`, {error: String(error)});
+          try { connection.close(); } catch (_) {}
+          if (!stopped) reconnectTimer = setTimeout(connect, 3000);
+        }
+      }
+
+      window.addEventListener('beforeunload', () => {
+        stopped = true;
+        clearTimeout(reconnectTimer);
+        if (pc) pc.close();
+      });
+      connect();
+    })();
+  </script>
+</body>
+</html>

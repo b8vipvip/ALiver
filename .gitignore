@@ -10,7 +10,12 @@ bridge/state.json
 bridge/bridge.local.json
 bridge/audio_routes.json
 bridge/douyin_visible_collector.local.json
+bridge/livetalking_cloud.local.json
 bridge/captures/
+services/livetalking/.env.aliver
+services/livetalking/models/
+services/livetalking/data/avatars/
+services/livetalking/data/record/
 *.log
 .DS_Store
 Thumbs.db

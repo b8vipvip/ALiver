@@ -1,0 +1,26 @@
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-pip python3-dev \
+      ffmpeg libsndfile1 libgl1 libglib2.0-0 \
+      git curl ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/livetalking
+COPY requirements.txt ./requirements.txt
+
+# The CUDA wheel index must match the host driver supported by the cloud GPU image.
+RUN python3 -m pip install --upgrade pip setuptools wheel \
+    && python3 -m pip install --index-url https://download.pytorch.org/whl/cu124 \
+         torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 \
+    && python3 -m pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 8010/tcp
+
+CMD ["python3", "app.py", "--transport", "webrtc", "--model", "wav2lip", "--avatar_id", "wav2lip256_avatar1", "--listenport", "8010", "--max_session", "1"]

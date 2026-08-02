@@ -9,6 +9,7 @@ from bridge.control_guard_install_patch import install_control_guard_install_pat
 from bridge.fast_startup_patch import install_bridge_fast_startup_patch
 from bridge.live_debug_defaults import install_live_debug_defaults
 from bridge.live_debug_json_safety_patch import install_live_debug_json_safety_patch
+from bridge.livetalking_dsp_patch import install_livetalking_dsp_patch
 from bridge.realtime_voice_dsp_granular_patch import (
     install_realtime_voice_dsp_granular_patch,
 )
@@ -37,6 +38,7 @@ install_realtime_voice_dsp_stable_engine_patch()
 install_realtime_voice_dsp_output_guard_patch()
 install_realtime_voice_dsp_granular_patch()
 install_realtime_voice_dsp_preset_library_patch()
+install_livetalking_dsp_patch()
 install_audio_environment_patch()
 install_live_debug_defaults()
 install_vtube_studio_auth_fix()
