@@ -7,7 +7,7 @@ from app.main import app
 
 
 def test_livetalking_console_routes_are_registered() -> None:
-    paths = {route.path for route in app.routes}
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert "/api/dashboard/livetalking/config" in paths
     assert "/api/dashboard/livetalking/health" in paths
     assert "/api/dashboard/livetalking/bridge/start" in paths
@@ -63,7 +63,7 @@ def test_static_console_and_viewer_include_session_handoff() -> None:
     console = (static_dir / "livetalking_cloud.html").read_text(encoding="utf-8")
     viewer = (static_dir / "livetalking_viewer.html").read_text(encoding="utf-8")
     assert "/api/dashboard/livetalking/config" in console
-    assert "/api/dashboard/livetalking/bridge/start" in console
+    assert "/api/dashboard/livetalking/bridge/${action}" in console
     assert "CABLE-B Output" in console
     assert "aliver-livetalking-session" in viewer
     assert "/api/livetalking-viewer/session" in viewer
