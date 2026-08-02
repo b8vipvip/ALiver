@@ -7,13 +7,14 @@ from app.main import app
 
 
 def test_livetalking_console_routes_are_registered() -> None:
-    paths = {route.path for route in app.routes if hasattr(route, "path")}
+    paths = set(app.openapi().get("paths", {}))
     assert "/api/dashboard/livetalking/config" in paths
     assert "/api/dashboard/livetalking/health" in paths
     assert "/api/dashboard/livetalking/bridge/start" in paths
-    assert "/api/livetalking-console" in paths
-    assert "/api/livetalking-viewer" in paths
+    assert "/api/livetalking-viewer/config" in paths
     assert "/api/livetalking-viewer/session" in paths
+    assert str(app.url_path_for("console_page")) == "/api/livetalking-console"
+    assert str(app.url_path_for("viewer_page")) == "/api/livetalking-viewer"
 
 
 def test_base_url_and_ws_url_normalization() -> None:
