@@ -1,0 +1,167 @@
+name: Vendor LiveTalking source
+
+on:
+  push:
+    branches:
+      - feat/livetalking-pcm-cloud-adapter
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vendor-livetalking-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  vendor:
+    if: ${{ !contains(github.event.head_commit.message || '', 'chore: vendor LiveTalking source') }}
+    runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Download and vendor upstream source
+        env:
+          LIVETALKING_REPO: lipku/LiveTalking
+          LIVETALKING_REF: main
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import shutil
+          import tarfile
+          import urllib.request
+          from pathlib import Path
+
+          root = Path.cwd()
+          dest = root / "services" / "livetalking"
+          repo = os.environ["LIVETALKING_REPO"]
+          ref = os.environ["LIVETALKING_REF"]
+
+          def request_json(url: str) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": "ALiver-LiveTalking-vendor",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          def request_bytes(url: str) -> bytes:
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "ALiver-LiveTalking-vendor"},
+              )
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  return response.read()
+
+          commit = request_json(f"https://api.github.com/repos/{repo}/commits/{ref}")
+          sha = str(commit["sha"])
+          archive = request_bytes(f"https://api.github.com/repos/{repo}/tarball/{sha}")
+          archive_sha256 = hashlib.sha256(archive).hexdigest()
+
+          temp = root / ".vendor-livetalking-tmp"
+          shutil.rmtree(temp, ignore_errors=True)
+          temp.mkdir(parents=True)
+          with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as handle:
+              handle.extractall(temp, filter="data")
+          source_roots = [item for item in temp.iterdir() if item.is_dir()]
+          if len(source_roots) != 1:
+              raise RuntimeError("Unexpected LiveTalking archive layout")
+          source = source_roots[0]
+
+          excluded_dirs = {
+              ".git",
+              ".github",
+              "models",
+              "data/avatars",
+              "data/record",
+              "__pycache__",
+          }
+          excluded_suffixes = {
+              ".pth", ".pt", ".onnx", ".ckpt", ".safetensors", ".pkl",
+              ".mp4", ".mov", ".avi", ".webm", ".wav", ".mp3", ".flac",
+              ".jpg", ".jpeg", ".png", ".gif", ".webp", ".ico",
+              ".zip", ".gz", ".tar", ".7z",
+          }
+          max_file_bytes = 2 * 1024 * 1024
+
+          shutil.rmtree(dest, ignore_errors=True)
+          dest.mkdir(parents=True)
+          copied = 0
+          for source_path in sorted(source.rglob("*")):
+              if not source_path.is_file():
+                  continue
+              relative = source_path.relative_to(source)
+              posix = relative.as_posix()
+              if any(posix == value or posix.startswith(value + "/") for value in excluded_dirs):
+                  continue
+              if relative.suffix.lower() in excluded_suffixes:
+                  continue
+              if source_path.stat().st_size > max_file_bytes:
+                  continue
+              target = dest / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source_path, target)
+              copied += 1
+
+          license_path = dest / "LICENSE"
+          if not license_path.exists():
+              raise RuntimeError("Upstream LICENSE was not copied")
+          shutil.copy2(license_path, dest / "UPSTREAM_LICENSE")
+
+          metadata = {
+              "upstream": f"https://github.com/{repo}",
+              "ref": ref,
+              "commit": sha,
+              "archive_sha256": archive_sha256,
+              "copied_files": copied,
+              "license": "Apache-2.0",
+              "excluded_directories": sorted(excluded_dirs),
+              "max_file_bytes": max_file_bytes,
+          }
+          (dest / "UPSTREAM.json").write_text(
+              json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          (dest / "UPSTREAM.md").write_text(
+              "# Vendored LiveTalking source\n\n"
+              f"- Upstream: https://github.com/{repo}\n"
+              f"- Ref: `{ref}`\n"
+              f"- Commit: `{sha}`\n"
+              f"- Copied source files: `{copied}`\n"
+              f"- Archive SHA-256: `{archive_sha256}`\n\n"
+              "Model weights, avatar datasets, recordings, large media, and binary assets "
+              "are intentionally excluded. See `UPSTREAM_LICENSE`.\n",
+              encoding="utf-8",
+          )
+          shutil.rmtree(temp, ignore_errors=True)
+          print(f"Vendored {copied} files from {repo}@{sha}")
+          PY
+
+      - name: Commit vendored source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/livetalking
+          if git diff --cached --quiet; then
+            echo "LiveTalking source is already current."
+            exit 0
+          fi
+          git commit -m "chore: vendor LiveTalking source"
+          git push origin HEAD:${TARGET_BRANCH}
