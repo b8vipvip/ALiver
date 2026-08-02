@@ -5,7 +5,37 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
+  vendor_livetalking:
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/livetalking-pcm-cloud-adapter' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Vendor LiveTalking source snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/vendor_livetalking.py
+      - name: Commit vendored source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/livetalking
+          if git diff --cached --quiet; then
+            echo "LiveTalking source is already current."
+            exit 0
+          fi
+          git commit -m "chore: vendor LiveTalking source"
+          git push origin HEAD:${{ github.head_ref }}
+
   test:
     runs-on: ubuntu-latest
     strategy:
