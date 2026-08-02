@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALiver · LiveTalking 云端数字人</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #131b31;
+      --panel-2: #18233d;
+      --text: #edf3ff;
+      --muted: #91a1bf;
+      --line: #2a3859;
+      --accent: #65a7ff;
+      --good: #45d19a;
+      --warn: #f4bd54;
+      --bad: #ff7272;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #172444 0, var(--bg) 52%);
+      color: var(--text);
+      font: 14px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); }
+    button, input, select {
+      font: inherit;
+    }
+    button {
+      border: 1px solid #4b79b8;
+      border-radius: 9px;
+      padding: 9px 14px;
+      background: #245b9d;
+      color: white;
+      cursor: pointer;
+    }
+    button.secondary { background: #202d48; border-color: #3a4c70; }
+    button.danger { background: #7d2f3a; border-color: #a54856; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #0d1528;
+      color: var(--text);
+    }
+    input[type="checkbox"] { width: auto; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    pre {
+      max-height: 330px;
+      overflow: auto;
+      margin: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #091020;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: center;
+      padding: 20px clamp(18px, 4vw, 48px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(9, 15, 30, .82);
+      backdrop-filter: blur(14px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h1 { margin: 0; font-size: 22px; }
+    .topbar p { margin: 3px 0 0; color: var(--muted); }
+    .top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .top-actions input { width: min(320px, 38vw); }
+    main { width: min(1480px, calc(100% - 32px)); margin: 24px auto 48px; }
+    .notice {
+      margin-bottom: 18px;
+      padding: 13px 15px;
+      border: 1px solid #35517b;
+      border-radius: 10px;
+      background: rgba(40, 82, 133, .22);
+    }
+    .grid { display: grid; gap: 18px; }
+    .grid.two { grid-template-columns: minmax(340px, .9fr) minmax(480px, 1.4fr); }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(24, 35, 61, .96), rgba(15, 24, 44, .96));
+      box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+    }
+    .panel h2 { margin: 0 0 14px; font-size: 18px; }
+    .panel h3 { margin: 20px 0 10px; font-size: 15px; }
+    .field { display: block; margin-bottom: 12px; }
+    .field > span { display: block; margin-bottom: 5px; color: #ced9ed; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .check {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: #d5e0f3;
+      margin: 8px 0;
+    }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 13px; }
+    .status-line {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #1a2641;
+      color: var(--muted);
+    }
+    .badge.good { color: var(--good); border-color: rgba(69, 209, 154, .5); }
+    .badge.warn { color: var(--warn); border-color: rgba(244, 189, 84, .5); }
+    .badge.bad { color: var(--bad); border-color: rgba(255, 114, 114, .5); }
+    .hint { color: var(--muted); margin: 6px 0 12px; }
+    .viewer-url { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .preview-shell {
+      position: relative;
+      min-height: 560px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #151d30 25%, transparent 25%),
+        linear-gradient(-45deg, #151d30 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #151d30 75%),
+        linear-gradient(-45deg, transparent 75%, #151d30 75%), #101829;
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+    .preview-shell iframe { width: 100%; height: 560px; border: 0; display: block; }
+    .preview-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      padding: 30px;
+      pointer-events: none;
+    }
+    .preview-shell.loaded .preview-empty { display: none; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .metric { padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: #10192d; }
+    .metric strong { display: block; font-size: 18px; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    #toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(520px, calc(100vw - 36px));
+      padding: 12px 15px;
+      border: 1px solid var(--good);
+      border-radius: 10px;
+      background: #10192d;
+      transform: translateY(130%);
+      transition: transform .2s ease;
+      z-index: 20;
+    }
+    #toast.show { transform: translateY(0); }
+    @media (max-width: 980px) {
+      .grid.two { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .top-actions input { width: min(100%, 420px); }
+    }
+    @media (max-width: 640px) {
+      .row, .metrics { grid-template-columns: 1fr; }
+      .viewer-url { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>LiveTalking 云端数字人</h1>
+      <p>video-only 预览、sessionid 自动接管与 Windows Bridge PCM 控制</p>
+    </div>
+    <div class="top-actions">
+      <a href="/">返回主控制台</a>
+      <input id="admin-token" type="password" placeholder="X-ALiver-Token">
+      <button id="save-admin-token" class="secondary">保存管理令牌</button>
+      <span id="page-status" class="badge warn">等待连接</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="notice">
+      直播伴侣中声音仍然只选择 <strong>CABLE-B Output</strong>。本页和浏览器源只接收 LiveTalking 视频轨，不能再启用网页音频。
+    </div>
+
+    <div class="grid two">
+      <section class="panel">
+        <h2>云端与 Bridge 配置</h2>
+        <label class="field">
+          <span>LiveTalking 云端地址</span>
+          <input id="base-url" placeholder="https://gpu.example.com">
+        </label>
+        <label class="field">
+          <span>ALIVER_STREAM_TOKEN</span>
+          <input id="pcm-token" type="password" placeholder="留空表示保留已保存 Token">
+        </label>
+        <label class="check">
+          <input id="clear-token" type="checkbox"> 清除已保存的 PCM Token
+        </label>
+        <label class="field">
+          <span>Avatar ID</span>
+          <input id="avatar-id" placeholder="例如 avatar_01">
+        </label>
+        <label class="field">
+          <span>Windows Bridge</span>
+          <select id="bridge-id"><option value="">请先读取在线 Bridge</option></select>
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>最大本地队列（ms）</span>
+            <input id="max-queue-ms" type="number" min="100" max="2000" value="400">
+          </label>
+          <label class="field">
+            <span>TLS 校验</span>
+            <select id="verify-tls">
+              <option value="true">开启</option>
+              <option value="false">关闭（仅临时测试）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span>最短重连（秒）</span>
+            <input id="reconnect-min" type="number" min="0.5" max="30" step="0.5" value="1">
+          </label>
+          <label class="field">
+            <span>最长重连（秒）</span>
+            <input id="reconnect-max" type="number" min="1" max="120" step="0.5" value="15">
+          </label>
+        </div>
+        <label class="check">
+          <input id="auto-start" type="checkbox" checked> 浏览器源获得新 sessionid 后自动配置并启动 PCM
+        </label>
+        <div class="actions">
+          <button id="save-config">保存配置</button>
+          <button id="refresh-config" class="secondary">重新读取</button>
+          <button id="cloud-health" class="secondary">检查云端</button>
+          <button id="rotate-key" class="secondary">更换 viewer key</button>
+        </div>
+        <p id="token-state" class="hint">PCM Token 尚未读取。</p>
+
+        <h3>直播伴侣浏览器源</h3>
+        <p class="hint">把下面 URL 作为浏览器源。页面创建 WebRTC 会话后，会把 sessionid 自动交给 ALiver Server，再由 Server 自动启动 Bridge PCM。</p>
+        <div class="viewer-url">
+          <input id="viewer-url" readonly placeholder="保存配置后生成">
+          <button id="copy-viewer-url" class="secondary">复制</button>
+        </div>
+        <div class="actions">
+          <button id="open-preview">在右侧预览</button>
+          <button id="close-preview" class="secondary">关闭预览</button>
+          <button id="open-viewer-window" class="secondary">新窗口打开</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="status-line">
+          <h2 style="margin:0">video-only 预览</h2>
+          <span id="preview-status" class="badge warn">未启动</span>
+        </div>
+        <div id="preview-shell" class="preview-shell">
+          <iframe id="preview-frame" title="LiveTalking video-only preview" allow="autoplay"></iframe>
+          <div class="preview-empty">保存配置后点击“在右侧预览”。预览页会自动创建 sessionid 并启动所选 Bridge 的 PCM 流。</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:18px">
+      <div class="status-line">
+        <h2 style="margin:0">Bridge PCM 控制与状态</h2>
+        <span id="bridge-status-badge" class="badge warn">未读取</span>
+      </div>
+      <label class="field">
+        <span>当前 sessionid</span>
+        <input id="session-id" placeholder="通常由浏览器源自动填写，也可手动覆盖">
+      </label>
+      <div class="actions">
+        <button data-action="configure" class="secondary">仅配置</button>
+        <button data-action="start">启动 PCM</button>
+        <button data-action="status" class="secondary">刷新状态</button>
+        <button data-action="interrupt" class="secondary">打断并清队列</button>
+        <button data-action="stop" class="danger">停止 PCM</button>
+      </div>
+      <div class="metrics">
+        <div class="metric"><strong id="metric-connected">否</strong><span>云端已连接</span></div>
+        <div class="metric"><strong id="metric-sent">0</strong><span>已发送帧</span></div>
+        <div class="metric"><strong id="metric-dropped">0</strong><span>丢弃帧</span></div>
+        <div class="metric"><strong id="metric-queue">0</strong><span>本地队列帧</span></div>
+      </div>
+      <pre id="bridge-json">尚未读取 Bridge 状态。</pre>
+    </section>
+
+    <section class="panel" style="margin-top:18px">
+      <h2>云端健康与活动流</h2>
+      <pre id="health-json">尚未检查云端。</pre>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    (() => {
+      const state = { config: null, bridges: [], pollBusy: false };
+      const $ = id => document.getElementById(id);
+
+      function toast(message, error = false) {
+        const element = $('toast');
+        element.textContent = message;
+        element.style.borderColor = error ? 'var(--bad)' : 'var(--good)';
+        element.classList.add('show');
+        clearTimeout(element._timer);
+        element._timer = setTimeout(() => element.classList.remove('show'), 5000);
+      }
+
+      function adminHeaders(json = false) {
+        const headers = {};
+        const token = localStorage.getItem('aliverAdminToken');
+        if (token) headers['X-ALiver-Token'] = token;
+        if (json) headers['Content-Type'] = 'application/json';
+        return headers;
+      }
+
+      async function api(path, options = {}) {
+        options.headers = { ...adminHeaders(Boolean(options.body)), ...(options.headers || {}) };
+        const response = await fetch(path, options);
+        if (!response.ok) {
+          let detail = `${response.status} ${response.statusText}`;
+          try {
+            const body = await response.json();
+            detail = body.detail || body.error || JSON.stringify(body);
+          } catch (_) {}
+          throw new Error(detail);
+        }
+        return response.status === 204 ? null : response.json();
+      }
+
+      function setBadge(id, text, kind = 'warn') {
+        const element = $(id);
+        element.textContent = text;
+        element.className = `badge ${kind}`;
+      }
+
+      function numberValue(id, fallback) {
+        const value = Number($(id).value);
+        return Number.isFinite(value) ? value : fallback;
+      }
+
+      async function loadBridges(selected = '') {
+        state.bridges = await api('/api/bridges');
+        const select = $('bridge-id');
+        const capable = state.bridges.filter(item =>
+          Array.isArray(item.capabilities) && item.capabilities.includes('audio.livetalking.start')
+        );
+        select.innerHTML = '<option value="">请选择 Bridge</option>' + capable.map(item => {
+          const online = item.connected ? '在线' : '离线';
+          return `<option value="${item.id}">${item.name} · ${online} · ${item.version}</option>`;
+        }).join('');
+        if (selected) select.value = selected;
+      }
+
+      function applyConfig(value) {
+        state.config = value;
+        const settings = value.settings || {};
+        $('base-url').value = settings.base_url || '';
+        $('avatar-id').value = settings.avatar_id || '';
+        $('max-queue-ms').value = settings.max_queue_ms || 400;
+        $('verify-tls').value = String(settings.verify_tls !== false);
+        $('reconnect-min').value = settings.reconnect_min_seconds || 1;
+        $('reconnect-max').value = settings.reconnect_max_seconds || 15;
+        $('auto-start').checked = settings.auto_start !== false;
+        $('session-id').value = settings.last_session_id || '';
+        $('viewer-url').value = value.viewer_url || '';
+        $('pcm-token').value = '';
+        $('clear-token').checked = false;
+        $('token-state').textContent = value.token_configured
+          ? 'PCM Token 已加密保存在 ALiver 本地。输入框留空会保留现有 Token。'
+          : 'PCM Token 尚未配置。';
+        setBadge('page-status', '配置已读取', 'good');
+      }
+
+      async function loadConfig() {
+        setBadge('page-status', '读取中', 'warn');
+        const value = await api('/api/dashboard/livetalking/config');
+        await loadBridges(value.settings?.bridge_id || '');
+        applyConfig(value);
+        return value;
+      }
+
+      async function saveConfig() {
+        const payload = {
+          base_url: $('base-url').value.trim(),
+          token: $('pcm-token').value.trim() || null,
+          clear_token: $('clear-token').checked,
+          avatar_id: $('avatar-id').value.trim(),
+          bridge_id: $('bridge-id').value,
+          verify_tls: $('verify-tls').value === 'true',
+          max_queue_ms: numberValue('max-queue-ms', 400),
+          reconnect_min_seconds: numberValue('reconnect-min', 1),
+          reconnect_max_seconds: numberValue('reconnect-max', 15),
+          auto_start: $('auto-start').checked,
+        };
+        const value = await api('/api/dashboard/livetalking/config', {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        applyConfig(value);
+        toast('LiveTalking 配置已保存');
+      }
+
+      async function checkHealth() {
+        $('health-json').textContent = '正在连接云端……';
+        const value = await api('/api/dashboard/livetalking/health');
+        $('health-json').textContent = JSON.stringify(value, null, 2);
+        setBadge('page-status', value.ok ? '云端正常' : '云端异常', value.ok ? 'good' : 'bad');
+        toast(value.ok ? '云端健康检查通过' : '云端返回异常', !value.ok);
+      }
+
+      function previewUrl(debug = true) {
+        const raw = $('viewer-url').value.trim();
+        if (!raw) throw new Error('请先保存配置并生成浏览器源 URL');
+        const url = new URL(raw);
+        if (debug) url.searchParams.set('debug', '1');
+        url.searchParams.set('_', String(Date.now()));
+        return url.toString();
+      }
+
+      function openPreview() {
+        const frame = $('preview-frame');
+        frame.src = previewUrl(true);
+        $('preview-shell').classList.add('loaded');
+        setBadge('preview-status', '正在创建会话', 'warn');
+      }
+
+      function closePreview() {
+        $('preview-frame').src = 'about:blank';
+        $('preview-shell').classList.remove('loaded');
+        setBadge('preview-status', '已关闭', 'warn');
+      }
+
+      function updateBridgeMetrics(value) {
+        const result = value?.result || value || {};
+        const status = result.livetalking_pcm || result;
+        $('metric-connected').textContent = status.connected ? '是' : '否';
+        $('metric-sent').textContent = status.frames_sent || 0;
+        $('metric-dropped').textContent = status.frames_dropped || 0;
+        $('metric-queue').textContent = status.frames_queued || 0;
+        const kind = status.connected ? 'good' : status.running ? 'warn' : 'bad';
+        setBadge('bridge-status-badge', status.status || '未知', kind);
+      }
+
+      async function bridgeAction(action, silent = false) {
+        const body = ['start', 'configure'].includes(action)
+          ? { session_id: $('session-id').value.trim() || null }
+          : {};
+        const value = await api(`/api/dashboard/livetalking/bridge/${action}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        $('bridge-json').textContent = JSON.stringify(value, null, 2);
+        updateBridgeMetrics(value);
+        if (!silent) toast(`Bridge 操作完成：${action}`);
+        return value;
+      }
+
+      async function rotateKey() {
+        const value = await api('/api/dashboard/livetalking/viewer-key/rotate', {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+        applyConfig(value);
+        closePreview();
+        toast('viewer key 已更换，直播伴侣中的旧 URL 需要替换');
+      }
+
+      window.addEventListener('message', event => {
+        const data = event.data || {};
+        if (data.type === 'aliver-livetalking-viewer') {
+          if (data.session_id) {
+            $('session-id').value = data.session_id;
+            setBadge('preview-status', '会话已接管', 'good');
+          }
+          if (data.error) setBadge('preview-status', '预览错误', 'bad');
+          if (data.bridge_result) {
+            $('bridge-json').textContent = JSON.stringify(data.bridge_result, null, 2);
+            updateBridgeMetrics(data.bridge_result);
+          }
+        }
+      });
+
+      $('save-admin-token').addEventListener('click', async () => {
+        localStorage.setItem('aliverAdminToken', $('admin-token').value.trim());
+        try {
+          await loadConfig();
+          toast('管理令牌已保存');
+        } catch (error) {
+          toast(error.message, true);
+          setBadge('page-status', '鉴权失败', 'bad');
+        }
+      });
+      $('save-config').addEventListener('click', () => saveConfig().catch(error => toast(error.message, true)));
+      $('refresh-config').addEventListener('click', () => loadConfig().catch(error => toast(error.message, true)));
+      $('cloud-health').addEventListener('click', () => checkHealth().catch(error => {
+        $('health-json').textContent = error.message;
+        toast(error.message, true);
+      }));
+      $('rotate-key').addEventListener('click', () => rotateKey().catch(error => toast(error.message, true)));
+      $('open-preview').addEventListener('click', () => {
+        try { openPreview(); } catch (error) { toast(error.message, true); }
+      });
+      $('close-preview').addEventListener('click', closePreview);
+      $('open-viewer-window').addEventListener('click', () => {
+        try { window.open(previewUrl(true), '_blank', 'noopener'); } catch (error) { toast(error.message, true); }
+      });
+      $('copy-viewer-url').addEventListener('click', async () => {
+        const value = $('viewer-url').value.trim();
+        if (!value) return toast('尚未生成浏览器源 URL', true);
+        await navigator.clipboard.writeText(value);
+        toast('浏览器源 URL 已复制');
+      });
+      document.querySelectorAll('[data-action]').forEach(button => {
+        button.addEventListener('click', () => bridgeAction(button.dataset.action).catch(error => toast(error.message, true)));
+      });
+
+      const storedToken = localStorage.getItem('aliverAdminToken') || '';
+      $('admin-token').value = storedToken;
+      if (storedToken) {
+        loadConfig().catch(error => {
+          toast(error.message, true);
+          setBadge('page-status', '读取失败', 'bad');
+        });
+      }
+      setInterval(async () => {
+        if (!state.config || state.pollBusy || document.hidden) return;
+        state.pollBusy = true;
+        try { await bridgeAction('status', true); } catch (_) {}
+        finally { state.pollBusy = false; }
+      }, 4000);
+    })();
+  </script>
+</body>
+</html>
